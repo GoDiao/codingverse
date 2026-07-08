@@ -55,6 +55,29 @@ const precedingDoc = (node: Node): string | undefined => {
   return undefined;
 };
 
+/**
+ * Find the byte offset where a definition's body begins (start of the body
+ * node). Returns undefined if the definition has no body node. Used by
+ * skeleton compression: everything before bodyStartByte is the signature.
+ *
+ * Handles arrow/function expressions assigned to a variable_declarator by
+ * descending into the value node.
+ */
+const findBodyStart = (defNode: Node): number | undefined => {
+  // Direct `body:` field (function_declaration, method_definition,
+  // class_declaration, function_definition, class_definition, …).
+  const body = defNode.childForFieldName("body");
+  if (body) return body.startIndex;
+
+  // variable_declarator with arrow/function-expression value.
+  const value = defNode.childForFieldName("value");
+  if (value) {
+    const innerBody = value.childForFieldName("body");
+    if (innerBody) return innerBody.startIndex;
+  }
+  return undefined;
+};
+
 export interface ExtractResult {
   symbols: RawSymbol[];
   refs: RawRef[];
@@ -94,6 +117,7 @@ export const extractSymbols = (handle: ParserHandle, rootNode: Node): ExtractRes
     kind: SymbolKind;
     startByte: number;
     endByte: number;
+    bodyStartByte?: number;
     startLine: number;
     endLine: number;
     signature?: string;
@@ -115,6 +139,7 @@ export const extractSymbols = (handle: ParserHandle, rootNode: Node): ExtractRes
       kind: def.kind,
       startByte: def.node.startIndex,
       endByte: def.node.endIndex,
+      bodyStartByte: findBodyStart(def.node),
       startLine: def.node.startPosition.row + 1,
       endLine: def.node.endPosition.row + 1,
       signature: firstLine(def.node),
@@ -144,6 +169,7 @@ export const extractSymbols = (handle: ParserHandle, rootNode: Node): ExtractRes
       endLine: d.endLine,
       startByte: d.startByte,
       endByte: d.endByte,
+      bodyStartByte: d.bodyStartByte,
       signature: d.signature,
       docstring: d.docstring,
       scope,

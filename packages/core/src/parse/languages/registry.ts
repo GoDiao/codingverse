@@ -14,6 +14,10 @@ export interface LanguageConfig {
   tagsQuery: string;
   /** AST node types that form good chunk boundaries (definitions). */
   chunkNodeTypes: string[];
+  /** Block style: brace `{}` or indentation. Drives skeleton rendering. */
+  scopeStyle: "brace" | "indent";
+  /** Single-line comment prefix (for skeleton placeholders). */
+  lineComment: string;
 }
 
 const EXTENSION_MAP: Record<string, Language> = {
@@ -29,58 +33,56 @@ const EXTENSION_MAP: Record<string, Language> = {
   ".pyw": "python",
 };
 
+const TS_CHUNK_NODES = [
+  "function_declaration",
+  "method_definition",
+  "class_declaration",
+  "interface_declaration",
+  "type_alias_declaration",
+  "enum_declaration",
+];
+const JS_CHUNK_NODES = ["function_declaration", "method_definition", "class_declaration"];
+
 const CONFIGS: Partial<Record<Language, LanguageConfig>> = {
   typescript: {
     language: "typescript",
     wasmFile: "tree-sitter-typescript.wasm",
     tagsQuery: TS_TAGS,
-    chunkNodeTypes: [
-      "function_declaration",
-      "method_definition",
-      "class_declaration",
-      "interface_declaration",
-      "type_alias_declaration",
-      "enum_declaration",
-    ],
+    chunkNodeTypes: TS_CHUNK_NODES,
+    scopeStyle: "brace",
+    lineComment: "//",
   },
   tsx: {
     language: "tsx",
     wasmFile: "tree-sitter-tsx.wasm",
     tagsQuery: TS_TAGS,
-    chunkNodeTypes: [
-      "function_declaration",
-      "method_definition",
-      "class_declaration",
-      "interface_declaration",
-      "type_alias_declaration",
-      "enum_declaration",
-    ],
+    chunkNodeTypes: TS_CHUNK_NODES,
+    scopeStyle: "brace",
+    lineComment: "//",
   },
   javascript: {
     language: "javascript",
     wasmFile: "tree-sitter-javascript.wasm",
     tagsQuery: TS_TAGS,
-    chunkNodeTypes: [
-      "function_declaration",
-      "method_definition",
-      "class_declaration",
-    ],
+    chunkNodeTypes: JS_CHUNK_NODES,
+    scopeStyle: "brace",
+    lineComment: "//",
   },
   jsx: {
     language: "jsx",
     wasmFile: "tree-sitter-javascript.wasm",
     tagsQuery: TS_TAGS,
-    chunkNodeTypes: [
-      "function_declaration",
-      "method_definition",
-      "class_declaration",
-    ],
+    chunkNodeTypes: JS_CHUNK_NODES,
+    scopeStyle: "brace",
+    lineComment: "//",
   },
   python: {
     language: "python",
     wasmFile: "tree-sitter-python.wasm",
     tagsQuery: PY_TAGS,
     chunkNodeTypes: ["function_definition", "class_definition"],
+    scopeStyle: "indent",
+    lineComment: "#",
   },
 };
 

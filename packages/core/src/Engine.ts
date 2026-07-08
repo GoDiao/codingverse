@@ -12,9 +12,11 @@ import type {
   Chunk,
   TreemapNode,
 } from "@codingverse/shared";
+import fs from "node:fs/promises";
 import { ingest } from "./ingest/index.js";
 import { parseFiles } from "./parse/index.js";
 import { TokenBudget, buildTokenTreemap, type FileTokenCount } from "./budget/index.js";
+import { compress } from "./assemble/index.js";
 
 export interface EngineOptions {
   /** Where to store the index/cache. Defaults to `<repo>/.codingverse`. */
@@ -32,6 +34,8 @@ export interface EngineOptions {
 export class Engine {
   private readonly repoPath: string;
   private readonly options: EngineOptions;
+  /** Last pack's expand map (skeleton id → source span), for expand(). */
+  private lastExpandMap: Record<string, import("@codingverse/shared").ExpandEntry> = {};
 
   private constructor(repoPath: string, options: EngineOptions) {
     this.repoPath = repoPath;
@@ -85,9 +89,36 @@ export class Engine {
     throw new Error("Engine.sync not implemented (M6)");
   }
 
-  /** Pack mode: layered compression into a single LLM context. */
-  async pack(_opts: PackOptions = {}): Promise<PackResult> {
-    throw new Error("Engine.pack not implemented (M4/M5)");
+  /**
+   * Pack mode: layered compression into a single LLM context.
+   * M4 produces the structured per-file layer result + expand map.
+   * M5 will add multi-format rendering (XML/Markdown/JSON) + directory tree.
+   */
+  async pack(opts: PackOptions = {}): Promise<PackResult> {
+    const { files: ingested } = await ingest(this.repoPath, opts);
+    const parsed = await parseFiles(ingested);
+    const sources = new Map(ingested.map((f) => [f.path, f.content]));
+
+    const result = await compress(parsed, sources, opts, this.repoPath);
+    this.lastExpandMap = result.expandMap;
+
+    // M4 preview assembly: concatenate non-omitted files with a simple header.
+    // (M5 replaces this with format-specific rendering.)
+    const parts: string[] = [];
+    for (const f of result.files) {
+      if (f.layer === "omit") continue;
+      parts.push(`===== ${f.path} [${f.layer}] =====\n${f.content}`);
+    }
+    const content = parts.join("\n\n");
+
+    return {
+      content,
+      tokenCount: result.total,
+      layerMap: result.layerMap,
+      fileCount: result.files.filter((f) => f.layer !== "omit").length,
+      files: result.files,
+      expandMap: result.expandMap,
+    };
   }
 
   /** Search mode: vector + BM25 + graph, fused via RRF. */
@@ -95,9 +126,18 @@ export class Engine {
     throw new Error("Engine.search not implemented (v1)");
   }
 
-  /** Expand a skeleton node by id (MCP lc_missing equivalent). */
-  async expand(_nodeId: string): Promise<string> {
-    throw new Error("Engine.expand not implemented (M4)");
+  /**
+   * Expand a skeleton symbol by id → its full source text.
+   * Uses the most recent pack's expand map; reads the span from disk.
+   */
+  async expand(id: string): Promise<string> {
+    const entry = this.lastExpandMap[id];
+    if (!entry) {
+      throw new Error(`Unknown expand id: ${id}. Run pack() first, or the id is stale.`);
+    }
+    const absPath = `${this.repoPath}/${entry.path}`;
+    const content = await fs.readFile(absPath, "utf8");
+    return content.slice(entry.startByte, entry.endByte);
   }
 
   /** Call-hierarchy: who calls this node. */

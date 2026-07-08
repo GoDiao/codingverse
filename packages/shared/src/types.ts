@@ -80,6 +80,13 @@ export interface RawSymbol {
   endLine: number;
   startByte: number;
   endByte: number;
+  /**
+   * Byte offset where the body begins (after the signature): the `{` for
+   * brace languages, or the newline after `:` for Python. Undefined when the
+   * symbol has no body (e.g. type alias, interface member). Used by skeleton
+   * compression to replace the body with a placeholder.
+   */
+  bodyStartByte?: number;
   signature?: string;
   docstring?: string;
   /** Names of enclosing scopes (outermost first), for qualified name. */
@@ -191,11 +198,36 @@ export interface PackOptions {
   alwaysFull?: string[];
 }
 
+/** One file rendered at a chosen layer. */
+export interface PackedFile {
+  path: string;
+  language: Language;
+  layer: Layer;
+  /** Rendered content for this layer (empty when layer === "omit"). */
+  content: string;
+  tokens: number;
+}
+
+/** A skeleton-expandable symbol: maps a stable id back to its source span. */
+export interface ExpandEntry {
+  id: string;
+  path: string;
+  name: string;
+  startByte: number;
+  endByte: number;
+  startLine: number;
+  endLine: number;
+}
+
 export interface PackResult {
   content: string;
   tokenCount: number;
   layerMap: Record<string, Layer>;
   fileCount: number;
+  /** Files with their chosen layers (for Dashboard board ⑤). */
+  files: PackedFile[];
+  /** Skeleton expansion map: stable id → source span. */
+  expandMap: Record<string, ExpandEntry>;
 }
 
 // ─────────────────────────────────────────────────────────────
