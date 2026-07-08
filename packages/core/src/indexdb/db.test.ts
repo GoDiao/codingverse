@@ -156,3 +156,70 @@ describe("IndexDb prepareStatements", () => {
     db.close();
   });
 });
+
+describe("IndexDb FK cascades (foreign_keys=ON)", () => {
+  const count = (db: IndexDb, sql: string, ...params: unknown[]): number =>
+    (db.db.prepare(`SELECT COUNT(*) AS n FROM ${sql}`).get(...params) as { n: number }).n;
+
+  it("enables foreign_keys=ON for the connection after migrate()", () => {
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    const fk = (db.db.prepare("PRAGMA foreign_keys").get() as { foreign_keys: number }).foreign_keys;
+    expect(fk).toBe(1);
+    db.close();
+  });
+
+  it("ON DELETE CASCADE removes edges and unresolved_refs whose from_node_id is the deleted node", () => {
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    db.db
+      .prepare("INSERT INTO nodes (id, kind, name, file_path) VALUES (?, ?, ?, ?)")
+      .run("n1", "function", "alpha", "src/a.ts");
+    db.db
+      .prepare("INSERT INTO nodes (id, kind, name, file_path) VALUES (?, ?, ?, ?)")
+      .run("n2", "function", "beta", "src/b.ts");
+    db.db
+      .prepare(
+        "INSERT INTO edges (source, target, kind, line, provenance) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run("n1", "n2", "calls", 1, "heuristic");
+    db.db
+      .prepare(
+        "INSERT INTO unresolved_refs (from_node_id, reference_name, reference_kind, line, file_path, language) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run("n1", "beta", "calls", 1, "src/a.ts", "typescript");
+
+    expect(count(db, "edges")).toBe(1);
+    expect(count(db, "unresolved_refs")).toBe(1);
+
+    // Delete n1 → cascade removes the edge (n1 is source) and the ref (from_node_id=n1).
+    db.db.prepare("DELETE FROM nodes WHERE id = ?").run("n1");
+    expect(count(db, "edges")).toBe(0);
+    expect(count(db, "unresolved_refs")).toBe(0);
+    // n2 untouched.
+    expect(count(db, "nodes WHERE id = ?", "n2")).toBe(1);
+    db.close();
+  });
+
+  it("ON DELETE CASCADE removes edges where the deleted node is the target", () => {
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    db.db
+      .prepare("INSERT INTO nodes (id, kind, name, file_path) VALUES (?, ?, ?, ?)")
+      .run("n1", "function", "alpha", "src/a.ts");
+    db.db
+      .prepare("INSERT INTO nodes (id, kind, name, file_path) VALUES (?, ?, ?, ?)")
+      .run("n2", "function", "beta", "src/b.ts");
+    db.db
+      .prepare(
+        "INSERT INTO edges (source, target, kind, line, provenance) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run("n1", "n2", "calls", 1, "heuristic");
+
+    // Delete n2 (the target) → edge cascade-deletes; n1 stays.
+    db.db.prepare("DELETE FROM nodes WHERE id = ?").run("n2");
+    expect(count(db, "edges")).toBe(0);
+    expect(count(db, "nodes WHERE id = ?", "n1")).toBe(1);
+    db.close();
+  });
+});

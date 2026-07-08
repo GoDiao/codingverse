@@ -50,13 +50,20 @@ export class IndexDb {
   }
 
   /**
-   * Run schema.sql (idempotent via IF NOT EXISTS) and apply WAL pragmas.
+   * Run schema.sql (idempotent via IF NOT EXISTS) and apply pragmas.
    * Returns the number of schema objects created by this call (tables + indexes +
    * triggers + FTS shadow tables); 0 on a no-op rerun.
+   *
+   * `PRAGMA foreign_keys=ON` is set outside any transaction (SQLite silently
+   * no-ops the pragma inside one) so the schema's `ON DELETE CASCADE` clauses
+   * on edges/unresolved_refs actually fire — without this, deleting a node
+   * leaves orphan edges pointing at it, corrupting graph expansion.
    */
   migrate(): number {
     const before = this.objectCount();
-    this.db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
+    this.db.exec(
+      "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys=ON;",
+    );
     const schema = fs.readFileSync(resolveSchemaPath(), "utf8");
     this.db.exec(schema);
     return this.objectCount() - before;

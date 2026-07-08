@@ -10,10 +10,10 @@ import type { IndexDb } from "./db.js";
  *
  * Matching priority (v1 heuristic):
  *   1. Same file + same language  — exact (name, file_path, language); on
- *      multiple same-file namesakes pick the smallest start_line.
+ *      multiple same-file namesakes pick the smallest (start_line, id).
  *   2. Same language, global      — exact (name, language); on multiple
- *      matches pick the smallest (file_path, start_line). Deterministic, since
- *      v1 has no PageRank to prefer the "most important" target.
+ *      matches pick the smallest (file_path, start_line, id). Deterministic,
+ *      since v1 has no PageRank to prefer the "most important" target.
  *
  * Refs with from_node_id IS NULL (no enclosing symbol) are skipped — an edge
  * needs a source node — and counted as unresolved. Refs that match a target
@@ -29,7 +29,9 @@ import type { IndexDb } from "./db.js";
  */
 
 export interface ResolveStats {
+  /** Refs that matched a node by name (including dups that deduped against existing edges). */
   resolved: number;
+  /** Refs that did not match any node, or had no enclosing symbol (null from_node_id). */
   unresolved: number;
 }
 
@@ -61,12 +63,12 @@ export class RefResolver {
     this.matchSameFile = d.prepare(
       `SELECT id FROM nodes
        WHERE name = ? AND file_path = ? AND language = ?
-       ORDER BY start_line ASC LIMIT 1`,
+       ORDER BY start_line ASC, id ASC LIMIT 1`,
     );
     this.matchGlobal = d.prepare(
       `SELECT id FROM nodes
        WHERE name = ? AND language = ?
-       ORDER BY file_path ASC, start_line ASC LIMIT 1`,
+       ORDER BY file_path ASC, start_line ASC, id ASC LIMIT 1`,
     );
     this.edgeExists = d.prepare(
       `SELECT 1 AS hit FROM edges

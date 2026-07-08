@@ -210,16 +210,39 @@ describe("RefResolver resolveAll — idempotent re-run", () => {
   });
 });
 
-describe("RefResolver resolveAll — transaction safety", () => {
-  it("commits all edges or none (edges only appear after COMMIT)", async () => {
-    const src = `function a() { return b(); }\nfunction b() { return 1; }\n`;
-    const { db } = await seed([{ path: "tx.ts", content: src }]);
+describe("RefResolver resolveAll — transaction safety (ROLLBACK on mid-loop failure)", () => {
+  it("rethrows and rolls back pending inserts when an edge INSERT fails mid-loop", async () => {
+    const file1 = `function a() { return b(); }\nfunction b() { return 1; }\n`;
+    const file2 = `export function c() { return 2; }\n`;
+    const { db } = await seed([
+      { path: "file1.ts", content: file1 },
+      { path: "file2.ts", content: file2 },
+    ]);
+    const aId = symbolId("file1.ts", "a");
+
+    // Append a synthetic ref (a→c, kind='boom') whose edge INSERT aborts via a
+    // trigger. The real ref a→b (kind='calls', lower rowid) is processed first:
+    // it resolves and inserts an edge that stays pending (uncommitted) inside
+    // the resolver's BEGIN…COMMIT. The synthetic ref a→c resolves to node c,
+    // then its INSERT fires RAISE(ABORT) → the catch branch must ROLLBACK,
+    // discarding the pending a→b edge. Proves the ROLLBACK path actually undoes
+    // partial writes rather than silently leaving dangling rows.
+    db.db
+      .prepare(
+        "INSERT INTO unresolved_refs (from_node_id, reference_name, reference_kind, line, file_path, language) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(aId, "c", "boom", 1, "file1.ts", "typescript");
+    db.db.exec(
+      "CREATE TRIGGER fail_boom BEFORE INSERT ON edges WHEN new.kind = 'boom' BEGIN SELECT RAISE(ABORT, 'synthetic mid-loop failure'); END",
+    );
 
     const resolver = new RefResolver(db);
-    const stats = resolver.resolveAll();
+    expect(() => resolver.resolveAll()).toThrow();
 
-    expect(stats.resolved).toBe(1);
-    expect(edgeCount(db)).toBe(1);
+    // ROLLBACK must have discarded the pending a→b edge → zero edges.
+    expect(edgeCount(db)).toBe(0);
+    // resolve never mutates unresolved_refs → both the real and synthetic ref remain.
+    expect(unresolvedCount(db)).toBe(2);
     db.close();
   });
 });
