@@ -3,4 +3,5 @@
 // Dir named `indexdb` to avoid clashing with package entry `index.ts`.
 export { IndexDb, type DbOptions } from "./db.js";
 export { IndexStore, type StoreInput, type StoreStats } from "./store.js";
+export { RefResolver, type ResolveStats } from "./resolve.js";
 export { symbolId, chunkId, qualifiedName } from "./ids.js";
