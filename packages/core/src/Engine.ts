@@ -20,6 +20,7 @@ import { TokenBudget, buildTokenTreemap, type FileTokenCount } from "./budget/in
 import { compress, render } from "./assemble/index.js";
 import { ExpandMapStore, type ExpandMapSnapshot } from "./assemble/expand-store.js";
 import { ParseCache } from "./cache/index.js";
+import { IndexDb, IndexStore, RefResolver, SearchEngine } from "./indexdb/index.js";
 import type { ParseCacheStats } from "@codingverse/shared";
 import { DEFAULT_TOKEN_BUDGET } from "@codingverse/shared";
 
@@ -45,11 +46,17 @@ export class Engine {
   private lastCacheStats: ParseCacheStats = { hits: 0, misses: 0, total: 0 };
   /** Lazily-loaded persistent expand map (from `<repo>/.codingverse/expand-map.json`). */
   private expandStore: ExpandMapStore;
+  /** SQLite index connection (opened in the constructor, closed in close()). */
+  private readonly indexDb: IndexDb;
+  private closed = false;
 
   private constructor(repoPath: string, options: EngineOptions) {
     this.repoPath = repoPath;
     this.options = options;
     this.expandStore = new ExpandMapStore(repoPath);
+    this.indexDb = new IndexDb({ repoRoot: repoPath });
+    this.indexDb.migrate();
+    this.indexDb.prepareStatements();
   }
 
   static async open(repoPath: string, opts: EngineOptions = {}): Promise<Engine> {
@@ -89,9 +96,44 @@ export class Engine {
     return { files, total, treemap };
   }
 
-  /** Stage ①-③: build / update the index. */
+  /**
+   * Stage ①-③: build / update the index.
+   *
+   * Pipeline: ingest → parseFilesCached (cross-cutting B parse cache) →
+   * IndexStore.write (SQLite nodes/chunks/files + FTS5) → RefResolver.resolveAll
+   * (unresolved_refs → edges). Returns aggregate counts.
+   *
+   * v1 uses a full store.write() rather than writeIncremental(changedPaths):
+   * computing the exact set of cache-miss paths here would duplicate the
+   * cache's own hit/miss logic. The parse cache already skips tree-sitter for
+   * unchanged files, so re-indexing is still fast; only the SQLite write is
+   * full. writeIncremental is a v1.5 refinement.
+   */
   async index(): Promise<IndexStats> {
-    throw new Error("Engine.index not implemented (M2/M3)");
+    const start = Date.now();
+    const { files: ingested } = await ingest(this.repoPath, {});
+    const sources = new Map(ingested.map((f) => [f.path, f.content]));
+
+    const cache = new ParseCache(this.repoPath);
+    await cache.load();
+    const { parsed, stats } = await parseFilesCached(ingested, cache);
+    await cache.save();
+    this.lastCacheStats = stats;
+
+    const store = new IndexStore(this.indexDb);
+    const storeStats = store.write({ parsed, sources });
+
+    const resolver = new RefResolver(this.indexDb);
+    const resolveStats = resolver.resolveAll();
+
+    return {
+      filesProcessed: stats.total,
+      filesSkipped: stats.hits,
+      symbols: storeStats.nodes,
+      edges: resolveStats.resolved,
+      chunks: storeStats.chunks,
+      durationMs: Date.now() - start,
+    };
   }
 
   /**
@@ -177,9 +219,34 @@ export class Engine {
     };
   }
 
-  /** Search mode: vector + BM25 + graph, fused via RRF. */
-  async search(_query: string, _opts: SearchOptions = {}): Promise<SearchHit[]> {
-    throw new Error("Engine.search not implemented (v1)");
+  /**
+   * Search mode: BM25 + co-location graph, fused via RRF.
+   *
+   * v1 has no vector path (embeddings land in v1.5), so SearchHit.scores.vector
+   * is always 0. topK drives result truncation; minScore and graphExpand are
+   * ignored in v1. Searching an empty (never-indexed) repo returns [] rather
+   * than throwing — SearchEngine handles empty tables gracefully.
+   */
+  async search(query: string, opts: SearchOptions = {}): Promise<SearchHit[]> {
+    const engine = new SearchEngine(this.indexDb);
+    const rows = engine.search({
+      query,
+      topK: opts.topK ?? 20,
+    });
+    return rows.map((row) => ({
+      chunkId: row.chunkId,
+      filePath: row.filePath,
+      startLine: row.startLine,
+      endLine: row.endLine,
+      body: row.body,
+      scores: {
+        vector: 0,
+        bm25: row.scores.bm25,
+        graph: row.scores.graph,
+        rrf: row.scores.rrf,
+      },
+      relatedNodes: row.relatedNodes,
+    }));
   }
 
   /**
@@ -240,8 +307,16 @@ export class Engine {
     throw new Error("Engine.stats not implemented (v2.5)");
   }
 
+  /**
+   * Close the SQLite index connection. Idempotent — safe to call multiple
+   * times. After close(), index()/search() will throw (the underlying
+   * DatabaseSync rejects operations once closed); pack()/expand() are
+   * unaffected since they never touch the index.
+   */
   async close(): Promise<void> {
-    // no-op until SQLite connection is introduced (v1)
+    if (this.closed) return;
+    this.closed = true;
+    this.indexDb.close();
   }
 
   /** Exposed for early CLI wiring / debugging. */
