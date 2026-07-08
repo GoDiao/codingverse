@@ -1,0 +1,25 @@
+{
+  "name": "codingverse-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "codingverse - unified Code RAG toolkit: index once, three-mode output (pack / search / observe)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.31.0",
+  "scripts": {
+    "build": "pnpm -r --filter \"./packages/**\" run build",
+    "clean": "pnpm -r --filter \"./packages/**\" run clean",
+    "typecheck": "pnpm -r --filter \"./packages/**\" run typecheck",
+    "cv": "pnpm --filter codingverse run start"
+  },
+  "keywords": [
+    "code-rag",
+    "llm-context",
+    "repo-packing",
+    "tree-sitter",
+    "mcp"
+  ],
+  "license": "MIT"
+}

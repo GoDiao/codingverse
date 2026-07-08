@@ -1,0 +1,29 @@
+{
+  "name": "codingverse",
+  "version": "0.0.0",
+  "description": "codingverse CLI — unified Code RAG toolkit (pack / index / search / status)",
+  "type": "module",
+  "bin": {
+    "cv": "./dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rimraf dist",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node ./dist/bin.js"
+  },
+  "dependencies": {
+    "@codingverse/core": "workspace:*",
+    "@codingverse/shared": "workspace:*",
+    "commander": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.2"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,6 @@
+# Normalize line endings to LF for text files (cross-platform TS project)
+* text=auto eol=lf
+
+# Binary / generated
+*.wasm binary
+pnpm-lock.yaml -text
