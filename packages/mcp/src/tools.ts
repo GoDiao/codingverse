@@ -108,10 +108,13 @@ async function handlePack(args: Record<string, unknown>): Promise<CallToolResult
 
 /** expand tool: resolve a skeleton symbol id to its full source text. */
 async function handleExpand(args: Record<string, unknown>): Promise<CallToolResult> {
-  const id = asString(args.id);
+  const rawId = asString(args.id);
   const projectPath = asString(args.projectPath);
-  if (!id) return errorResult("Parameter 'id' is required.");
+  if (!rawId) return errorResult("Parameter 'id' is required.");
   if (!projectPath) return errorResult("Parameter 'projectPath' is required.");
+
+  // Accept the id with or without the `cv:` prefix (matches `cv expand` CLI).
+  const id = rawId.startsWith("cv:") ? rawId.slice(3) : rawId;
 
   const engine = await getEngine(projectPath);
   const body = await engine.expand(id);
