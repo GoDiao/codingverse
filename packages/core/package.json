@@ -24,6 +24,7 @@
   "dependencies": {
     "@codingverse/shared": "workspace:*",
     "globby": "^16.2.1",
+    "gpt-tokenizer": "^3.4.0",
     "iconv-lite": "^0.7.3",
     "is-binary-path": "^3.0.0",
     "isbinaryfile": "^6.0.0",

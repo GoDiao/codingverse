@@ -9,9 +9,12 @@ import type {
   IngestConfig,
   IngestResult,
   ParsedFile,
+  Chunk,
+  TreemapNode,
 } from "@codingverse/shared";
 import { ingest } from "./ingest/index.js";
 import { parseFiles } from "./parse/index.js";
+import { TokenBudget, buildTokenTreemap, type FileTokenCount } from "./budget/index.js";
 
 export interface EngineOptions {
   /** Where to store the index/cache. Defaults to `<repo>/.codingverse`. */
@@ -48,6 +51,28 @@ export class Engine {
   async parse(config: IngestConfig = {}): Promise<ParsedFile[]> {
     const { files } = await ingest(this.repoPath, config);
     return parseFiles(files);
+  }
+
+  /**
+   * Cross-cutting A: token accounting over the parsed repo.
+   * Counts every chunk, aggregates per file, and builds a token treemap.
+   */
+  async tokenReport(
+    config: IngestConfig = {},
+  ): Promise<{ files: FileTokenCount[]; total: number; treemap: TreemapNode }> {
+    const parsed = await this.parse(config);
+    const budget = new TokenBudget({ repoRoot: this.repoPath });
+    await budget.init();
+
+    const byFile = new Map<string, Chunk[]>();
+    for (const p of parsed) byFile.set(p.path, p.chunks);
+
+    const files = budget.countFiles(byFile);
+    await budget.flush();
+
+    const total = files.reduce((sum, f) => sum + f.tokens, 0);
+    const treemap = buildTokenTreemap(files);
+    return { files, total, treemap };
   }
 
   /** Stage ①-③: build / update the index. */

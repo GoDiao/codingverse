@@ -38,6 +38,9 @@ importers:
       globby:
         specifier: ^16.2.1
         version: 16.2.1
+      gpt-tokenizer:
+        specifier: ^3.4.0
+        version: 3.4.0
       iconv-lite:
         specifier: ^0.7.3
         version: 0.7.3
@@ -344,6 +347,9 @@ packages:
   globby@16.2.1:
     resolution: {integrity: sha512-JmsqJalahxxgW8V2ecSQ2G7UjPlI9cpKdrkG9KoNiXhd/YslXOTEB0cViENWUznuovIuNT+FkMbraDGjr4FCUg==}
     engines: {node: '>=20'}
+
+  gpt-tokenizer@3.4.0:
+    resolution: {integrity: sha512-wxFLnhIXTDjYebd9A9pGl3e31ZpSypbpIJSOswbgop5jLte/AsZVDvjlbEuVFlsqZixVKqbcoNmRlFDf6pz/UQ==}
 
   iconv-lite@0.7.3:
     resolution: {integrity: sha512-IKXpvIzjnC9XTAUbVBcMfGS0EPaIXtW6v+zr+RRp+hqULEpo0owZax6wyRwPOJbWbzjYspQwusTsfVr0ifh4uQ==}
@@ -912,6 +918,8 @@ snapshots:
       is-path-inside: 4.0.0
       slash: 5.1.0
       unicorn-magic: 0.4.0
+
+  gpt-tokenizer@3.4.0: {}
 
   iconv-lite@0.7.3:
     dependencies:
