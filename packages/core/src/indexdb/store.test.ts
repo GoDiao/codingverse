@@ -147,6 +147,87 @@ describe("IndexStore write — unresolved_refs", () => {
     expect(rows[0]!.from_node_id).toBe(symbolId("nest.ts", "C::m"));
     db.close();
   });
+
+  it("handles a ref at line 1 inside a single-line top-level symbol (no off-by-one)", async () => {
+    const src = `function a() { return b(); }\nfunction b() { return 1; }\n`;
+    const parsed = await parseFiles([mk("l1.ts", src)]);
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    const store = new IndexStore(db);
+    store.write({ parsed, sources: srcMap(parsed, { "l1.ts": src }) });
+
+    const row = db.db
+      .prepare("SELECT from_node_id, line FROM unresolved_refs WHERE reference_name = ?")
+      .get("b") as { from_node_id: string | null; line: number };
+    expect(row.line).toBe(1);
+    expect(row.from_node_id).toBe(symbolId("l1.ts", "a"));
+    db.close();
+  });
+
+  it("sets from_node_id NULL for a ref in a filler region between symbols", async () => {
+    const src = `function a() { return 1; }\nrunThing();\nfunction b() { return 2; }\n`;
+    const parsed = await parseFiles([mk("filler.ts", src)]);
+    const aSym = parsed[0]!.symbols.find((s) => s.name === "a");
+    const bSym = parsed[0]!.symbols.find((s) => s.name === "b");
+    expect(aSym?.startLine).toBe(1);
+    expect(aSym?.endLine).toBe(1);
+    expect(bSym?.startLine).toBe(3);
+    expect(bSym?.endLine).toBe(3);
+
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    const store = new IndexStore(db);
+    store.write({ parsed, sources: srcMap(parsed, { "filler.ts": src }) });
+
+    const row = db.db
+      .prepare("SELECT from_node_id, line FROM unresolved_refs WHERE reference_name = ?")
+      .get("runThing") as { from_node_id: string | null; line: number };
+    expect(row).toBeDefined();
+    expect(row.line).toBe(2);
+    expect(row.from_node_id).toBeNull();
+    db.close();
+  });
+
+  it("sets from_node_id NULL for a top-level ref before any function definition", async () => {
+    const src = `console.log("hi");\nexport function f() {}\n`;
+    const parsed = await parseFiles([mk("top.ts", src)]);
+    const fSym = parsed[0]!.symbols.find((s) => s.name === "f");
+    expect(fSym?.startLine).toBe(2);
+
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    const store = new IndexStore(db);
+    store.write({ parsed, sources: srcMap(parsed, { "top.ts": src }) });
+
+    const row = db.db
+      .prepare("SELECT from_node_id, line FROM unresolved_refs WHERE reference_name = ?")
+      .get("log") as { from_node_id: string | null; line: number };
+    expect(row).toBeDefined();
+    expect(row.line).toBe(1);
+    expect(row.from_node_id).toBeNull();
+    db.close();
+  });
+
+  it("writes a degraded file with empty unresolved_refs and no symbols", async () => {
+    const content = `# hi\nsome text\n`;
+    const parsed = await parseFiles([mk("data.md", content)]);
+    expect(parsed[0]!.degraded).toBe(true);
+    expect(parsed[0]!.symbols).toHaveLength(0);
+    expect(parsed[0]!.refs).toHaveLength(0);
+
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    const store = new IndexStore(db);
+    const stats = store.write({ parsed, sources: srcMap(parsed, { "data.md": content }) });
+
+    expect(stats.files).toBe(1);
+    expect(stats.nodes).toBe(0);
+    expect(stats.unresolved).toBe(0);
+    expect(count(db, "unresolved_refs")).toBe(0);
+    expect(count(db, "nodes")).toBe(0);
+    expect(count(db, "files")).toBe(1);
+    db.close();
+  });
 });
 
 describe("IndexStore pruneFiles", () => {

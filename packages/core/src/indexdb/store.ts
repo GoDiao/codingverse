@@ -32,6 +32,7 @@ export interface StoreInput {
 
 export interface StoreStats {
   nodes: number;
+  /** Always 0 in V1-2; edges are produced by resolve.ts (V1-3). */
   edges: number;
   chunks: number;
   files: number;
@@ -100,6 +101,7 @@ export class IndexStore {
    * (cascades to edges + unresolved_refs.from_node_id), chunks, and
    * remaining unresolved_refs (those with from_node_id = NULL) per file.
    */
+  // Plan assumed FK cascade from files→nodes/chunks; schema has no such FK, so we delete explicitly by file_path.
   pruneFiles(livePaths: Set<string>): number {
     let deleted = 0;
     this.db.db.exec("BEGIN");
@@ -174,11 +176,35 @@ export class IndexStore {
     this.deleteUnresolvedByFile.run(p.path);
 
     const now = Date.now();
-    const symbolsSorted = this.sortSymbolsInnermost(p.symbols);
+
+    // Precompute per-symbol qualifiedName + id once, so node insertion and
+    // ref lookup never recompute the sha1 hash. The sorted mirror carries the
+    // precomputed id alongside the line range, so findInnermostSymbol is a
+    // plain linear scan with no hashing per comparison.
+    const qnBySym = new Map<RawSymbol, string>();
+    const idBySym = new Map<RawSymbol, string>();
+    for (const sym of p.symbols) {
+      const qn = qualifiedName(sym);
+      qnBySym.set(sym, qn);
+      idBySym.set(sym, symbolId(p.path, qn));
+    }
+    const sortedForLookup = [...p.symbols]
+      .map((sym) => ({
+        sym,
+        id: idBySym.get(sym)!,
+        lineRange: sym.endLine - sym.startLine,
+        byteRange: sym.endByte - sym.startByte,
+      }))
+      // Plan said "startLine asc, endLine desc" (outermost-first); corrected to smallest-range-first so the first line-containment match is the innermost enclosing symbol.
+      .sort(
+        (a, b) =>
+          a.lineRange - b.lineRange ||
+          a.byteRange - b.byteRange,
+      );
 
     let symbols = 0;
     for (const sym of p.symbols) {
-      const np = this.nodeParams(p, sym, now);
+      const np = this.nodeParams(p, sym, now, qnBySym.get(sym)!, idBySym.get(sym)!);
       this.insertNode.run(
         np.id,
         np.kind,
@@ -214,7 +240,7 @@ export class IndexStore {
 
     let refs = 0;
     for (const ref of p.refs) {
-      const fromNodeId = this.findInnermostSymbol(p.path, symbolsSorted, ref);
+      const fromNodeId = this.findInnermostSymbol(sortedForLookup, ref);
       const up = this.unresolvedParams(p, ref, fromNodeId);
       this.insertUnresolved.run(
         up.fromNodeId,
@@ -232,38 +258,34 @@ export class IndexStore {
   }
 
   /**
-   * Sort symbols so the innermost containing range is encountered first.
-   * Order: smallest line range, then smallest byte range. For non-overlapping
-   * nested scopes this yields inner → outer → unrelated, so the first
-   * line-containment match is the innermost enclosing symbol.
+   * Find the innermost enclosing symbol for a ref by linear scan over the
+   * smallest-range-first sorted list. Returns the precomputed id (no hashing
+   * here) or null when the ref lives outside any symbol range.
    */
-  private sortSymbolsInnermost(symbols: RawSymbol[]): RawSymbol[] {
-    return [...symbols].sort(
-      (a, b) =>
-        a.endLine - a.startLine - (b.endLine - b.startLine) ||
-        a.endByte - a.startByte - (b.endByte - b.startByte),
-    );
-  }
-
   private findInnermostSymbol(
-    filePath: string,
-    symbolsSorted: RawSymbol[],
+    sortedForLookup: Array<{ sym: RawSymbol; id: string; lineRange: number; byteRange: number }>,
     ref: RawRef,
   ): string | null {
-    for (const sym of symbolsSorted) {
-      if (sym.startLine <= ref.startLine && ref.startLine <= sym.endLine) {
-        return symbolId(filePath, qualifiedName(sym));
+    for (const entry of sortedForLookup) {
+      if (entry.sym.startLine <= ref.startLine && ref.startLine <= entry.sym.endLine) {
+        return entry.id;
       }
     }
     return null;
   }
 
-  private nodeParams(p: ParsedFile, sym: RawSymbol, now: number) {
+  private nodeParams(
+    p: ParsedFile,
+    sym: RawSymbol,
+    now: number,
+    qualifiedName: string,
+    id: string,
+  ) {
     return {
-      id: symbolId(p.path, qualifiedName(sym)),
+      id,
       kind: sym.kind,
       name: sym.name,
-      qualifiedName: qualifiedName(sym),
+      qualifiedName,
       filePath: p.path,
       language: p.language,
       startLine: sym.startLine,
