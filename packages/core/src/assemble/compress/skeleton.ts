@@ -1,6 +1,8 @@
-import { createHash } from "node:crypto";
 import type { RawSymbol, ExpandEntry } from "@codingverse/shared";
 import type { LanguageConfig } from "../../parse/languages/registry.js";
+import { symbolId, qualifiedName } from "../../indexdb/ids.js";
+
+export { symbolId, qualifiedName } from "../../indexdb/ids.js";
 
 /**
  * Skeleton compression (inspired by LlamaIndex CodeHierarchy).
@@ -14,13 +16,6 @@ import type { LanguageConfig } from "../../parse/languages/registry.js";
  * Container symbols (class/interface) render their members' skeletons nested
  * instead of a placeholder.
  */
-
-/** Stable symbol id = hash(path + qualifiedName). Matches SymbolNode.id. */
-export const symbolId = (filePath: string, qualifiedName: string): string =>
-  createHash("sha1").update(`${filePath}:${qualifiedName}`).digest("hex").slice(0, 16);
-
-const qualifiedName = (sym: RawSymbol): string =>
-  sym.scope.length ? `${sym.scope.join("::")}::${sym.name}` : sym.name;
 
 interface SymNode {
   sym: RawSymbol;

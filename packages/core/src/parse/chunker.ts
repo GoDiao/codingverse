@@ -1,8 +1,10 @@
-import { createHash } from "node:crypto";
 import type { Chunk, Language } from "@codingverse/shared";
 import { DEFAULT_CHUNK_SIZE } from "@codingverse/shared";
 import type { Node } from "web-tree-sitter";
 import type { LanguageConfig } from "./languages/registry.js";
+import { chunkId } from "../indexdb/ids.js";
+
+export { chunkId } from "../indexdb/ids.js";
 
 /**
  * AST semantic chunking (inspired by Tabby's CodeSplitter).
@@ -12,9 +14,6 @@ import type { LanguageConfig } from "./languages/registry.js";
  * statements) are grouped into "filler" chunks. Oversized definition bodies
  * are split by line windows so no chunk greatly exceeds the target capacity.
  */
-
-const chunkId = (filePath: string, startByte: number): string =>
-  createHash("sha1").update(`${filePath}:${startByte}`).digest("hex").slice(0, 16);
 
 /** Split a large text block into line-windowed pieces near `capacity` chars. */
 const splitByLines = (
