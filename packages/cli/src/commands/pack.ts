@@ -94,13 +94,15 @@ export function registerPack(program: Command): void {
         // Layer summary → stderr (keeps stdout clean for piping).
         const counts: Record<Layer, number> = { full: 0, skeleton: 0, outline: 0, omit: 0 };
         for (const f of result.files) counts[f.layer]++;
+        const cs = engine.getCacheStats();
         console.error(
           `\n[cv pack] ${result.fileCount} files packed, ${result.tokenCount} tokens ` +
             `(budget ${opts.budget}) — ` +
             `F:${counts.full} S:${counts.skeleton} O:${counts.outline} -:${counts.omit}` +
             (Object.keys(result.expandMap).length
               ? `, ${Object.keys(result.expandMap).length} expandable symbols`
-              : ""),
+              : "") +
+            `\n[cv pack] parse cache: ${cs.hits} hits, ${cs.misses} misses / ${cs.total}`,
         );
         await engine.close();
       },

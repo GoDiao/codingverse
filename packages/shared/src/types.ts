@@ -113,6 +113,23 @@ export interface ParsedFile {
   degraded: boolean;
 }
 
+/**
+ * A cached parse result keyed by content hash (git blob oid).
+ * Stored under `<repo>/.codingverse/parse-cache.json`.
+ */
+export interface ParseCacheEntry {
+  /** git blob hash of the file content at index time. */
+  blobHash: string;
+  parsed: ParsedFile;
+}
+
+/** Stats about cache hits/misses during a parse run. */
+export interface ParseCacheStats {
+  hits: number;
+  misses: number;
+  total: number;
+}
+
 export type SymbolKind =
   | "function"
   | "method"

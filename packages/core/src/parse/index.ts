@@ -1,11 +1,18 @@
 // Stage ② Parse: web-tree-sitter WASM parsing, symbol extraction, AST chunking.
 
 import { createHash } from "node:crypto";
-import type { FileEntry, ParsedFile, Chunk, Language } from "@codingverse/shared";
+import type {
+  FileEntry,
+  ParsedFile,
+  Chunk,
+  Language,
+  ParseCacheStats,
+} from "@codingverse/shared";
 import { detectLanguage, getLanguageConfig } from "./languages/registry.js";
 import { getParser, resetParserCaches } from "./parser.js";
 import { extractSymbols } from "./extract.js";
 import { chunkFile } from "./chunker.js";
+import type { ParseCache } from "../cache/index.js";
 
 export { detectLanguage, getLanguageConfig, supportedLanguages } from "./languages/index.js";
 export { getParser, resetParserCaches } from "./parser.js";
@@ -89,6 +96,35 @@ export const parseFiles = async (files: FileEntry[]): Promise<ParsedFile[]> => {
   const out: ParsedFile[] = [];
   for (const file of files) out.push(await parseFile(file));
   return out;
+};
+
+/**
+ * Parse many files with an incremental cache (cross-cutting B).
+ * Cache hits skip tree-sitter parsing entirely. Prunes deleted paths.
+ */
+export const parseFilesCached = async (
+  files: FileEntry[],
+  cache: ParseCache,
+): Promise<{ parsed: ParsedFile[]; stats: ParseCacheStats }> => {
+  const out: ParsedFile[] = [];
+  let hits = 0;
+  for (const file of files) {
+    const cached = cache.get(file.path, file.content);
+    if (cached) {
+      out.push(cached);
+      hits++;
+      continue;
+    }
+    const parsed = await parseFile(file);
+    cache.set(file.path, file.content, parsed);
+    out.push(parsed);
+  }
+  // GC entries for files no longer present.
+  cache.prune(new Set(files.map((f) => f.path)));
+  return {
+    parsed: out,
+    stats: { hits, misses: files.length - hits, total: files.length },
+  };
 };
 
 /** Release all cached WASM resources (tests/shutdown). */

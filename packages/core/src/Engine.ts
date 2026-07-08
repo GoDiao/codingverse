@@ -14,9 +14,11 @@ import type {
 } from "@codingverse/shared";
 import fs from "node:fs/promises";
 import { ingest } from "./ingest/index.js";
-import { parseFiles } from "./parse/index.js";
+import { parseFiles, parseFilesCached } from "./parse/index.js";
 import { TokenBudget, buildTokenTreemap, type FileTokenCount } from "./budget/index.js";
 import { compress, render } from "./assemble/index.js";
+import { ParseCache } from "./cache/index.js";
+import type { ParseCacheStats } from "@codingverse/shared";
 
 export interface EngineOptions {
   /** Where to store the index/cache. Defaults to `<repo>/.codingverse`. */
@@ -36,6 +38,8 @@ export class Engine {
   private readonly options: EngineOptions;
   /** Last pack's expand map (skeleton id → source span), for expand(). */
   private lastExpandMap: Record<string, import("@codingverse/shared").ExpandEntry> = {};
+  /** Last pack's parse-cache hit/miss stats. */
+  private lastCacheStats: ParseCacheStats = { hits: 0, misses: 0, total: 0 };
 
   private constructor(repoPath: string, options: EngineOptions) {
     this.repoPath = repoPath;
@@ -84,20 +88,55 @@ export class Engine {
     throw new Error("Engine.index not implemented (M2/M3)");
   }
 
-  /** Incremental sync via git blob hash fast path. */
-  async sync(): Promise<IndexStats> {
-    throw new Error("Engine.sync not implemented (M6)");
+  /**
+   * Incremental sync: refresh the parse cache from disk without rendering.
+   * Warms the cache so the next pack is fast; returns parse stats.
+   */
+  async sync(config: IngestConfig = {}): Promise<IndexStats> {
+    const start = Date.now();
+    const { files: ingested } = await ingest(this.repoPath, config);
+    const cache = new ParseCache(this.repoPath);
+    await cache.load();
+    const { parsed, stats } = await parseFilesCached(ingested, cache);
+    await cache.save();
+    this.lastCacheStats = stats;
+
+    let symbols = 0;
+    let chunks = 0;
+    for (const p of parsed) {
+      symbols += p.symbols.length;
+      chunks += p.chunks.length;
+    }
+    return {
+      filesProcessed: stats.total,
+      filesSkipped: stats.hits,
+      symbols,
+      edges: 0,
+      chunks,
+      durationMs: Date.now() - start,
+    };
+  }
+
+  /** Parse-cache hit/miss stats from the last pack() or sync(). */
+  getCacheStats(): ParseCacheStats {
+    return this.lastCacheStats;
   }
 
   /**
    * Pack mode: layered compression into a single LLM context.
-   * M4 produces the structured per-file layer result + expand map.
-   * M5 will add multi-format rendering (XML/Markdown/JSON) + directory tree.
+   * Uses the incremental parse cache (cross-cutting B): unchanged files skip
+   * tree-sitter parsing entirely, making repeat packs fast.
    */
   async pack(opts: PackOptions = {}): Promise<PackResult> {
     const { files: ingested } = await ingest(this.repoPath, opts);
-    const parsed = await parseFiles(ingested);
     const sources = new Map(ingested.map((f) => [f.path, f.content]));
+
+    // Incremental parse via git-blob-hash cache.
+    const cache = new ParseCache(this.repoPath);
+    await cache.load();
+    const { parsed, stats } = await parseFilesCached(ingested, cache);
+    await cache.save();
+    this.lastCacheStats = stats;
 
     const result = await compress(parsed, sources, opts, this.repoPath);
     this.lastExpandMap = result.expandMap;
