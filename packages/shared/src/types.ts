@@ -4,6 +4,59 @@
  */
 
 // ─────────────────────────────────────────────────────────────
+// Stage ① Ingest: file discovery & reading
+// ─────────────────────────────────────────────────────────────
+
+export type FileSkipReason =
+  | "binary-extension"
+  | "binary-content"
+  | "size-limit"
+  | "encoding-error"
+  | "invalid-file";
+
+/** A successfully ingested file: discovered, read, decoded, validated. */
+export interface FileEntry {
+  /** Path relative to repo root, POSIX separators. */
+  path: string;
+  /** Absolute filesystem path. */
+  absPath: string;
+  /** Decoded text content. */
+  content: string;
+  /** Byte length of the raw file. */
+  size: number;
+}
+
+/** A file that was discovered but skipped, with the reason. */
+export interface SkippedFile {
+  path: string;
+  reason: FileSkipReason;
+}
+
+/** Configuration for the ingest stage. */
+export interface IngestConfig {
+  /** Glob patterns to include. Defaults to all files. */
+  include?: string[];
+  /** Extra ignore glob patterns (on top of defaults + .gitignore). */
+  exclude?: string[];
+  /** Respect .gitignore / .git/info/exclude. Default true. */
+  useGitignore?: boolean;
+  /** Apply built-in DEFAULT_IGNORE list. Default true. */
+  useDefaultIgnore?: boolean;
+  /** Max file size in bytes; larger files are skipped. */
+  maxFileSize?: number;
+  /** Apply is_valid_file heuristics (reject minified/generated). Default true. */
+  validate?: boolean;
+  /** Concurrency for reading files. Default 64. */
+  concurrency?: number;
+}
+
+/** Result of the ingest stage. */
+export interface IngestResult {
+  files: FileEntry[];
+  skipped: SkippedFile[];
+}
+
+// ─────────────────────────────────────────────────────────────
 // Stage ② Parse: symbols & relations
 // ─────────────────────────────────────────────────────────────
 

@@ -6,7 +6,10 @@ import type {
   SearchHit,
   SymbolNode,
   DashboardStats,
+  IngestConfig,
+  IngestResult,
 } from "@codingverse/shared";
+import { ingest } from "./ingest/index.js";
 
 export interface EngineOptions {
   /** Where to store the index/cache. Defaults to `<repo>/.codingverse`. */
@@ -32,6 +35,11 @@ export class Engine {
 
   static async open(repoPath: string, opts: EngineOptions = {}): Promise<Engine> {
     return new Engine(repoPath, opts);
+  }
+
+  /** Stage ①: discover, read, decode, and validate files. */
+  async ingest(config: IngestConfig = {}): Promise<IngestResult> {
+    return ingest(this.repoPath, config);
   }
 
   /** Stage ①-③: build / update the index. */
