@@ -122,6 +122,30 @@ describe("Engine.search — empty / no-match", () => {
   });
 });
 
+describe("Engine.index — pruning deleted files", () => {
+  it("drops rows for files removed between index runs (no stale hits)", async () => {
+    const engine = await Engine.open(dir);
+    try {
+      const first = await engine.index();
+      expect(first.symbols).toBeGreaterThan(0);
+      expect(await engine.search("widget")).not.toEqual([]);
+
+      await fsp.rm(path.join(dir, "a.ts"));
+
+      const second = await engine.index();
+      expect(second.symbols).toBeLessThan(first.symbols);
+      expect(await engine.search("widget")).toEqual([]);
+
+      const remaining = await engine.search("sorcery");
+      for (const hit of remaining) {
+        expect(hit.filePath).not.toBe("a.ts");
+      }
+    } finally {
+      await engine.close();
+    }
+  });
+});
+
 describe("Engine.close — lifecycle", () => {
   it("is idempotent", async () => {
     const engine = await Engine.open(dir);
@@ -129,18 +153,24 @@ describe("Engine.close — lifecycle", () => {
     await expect(engine.close()).resolves.toBeUndefined();
   });
 
-  it("makes subsequent search() throw (connection closed)", async () => {
+  it("is a no-op when index() was never called (no IndexDb opened)", async () => {
     const engine = await Engine.open(dir);
-    await engine.index();
-    await engine.close();
-    await expect(engine.search("widget")).rejects.toThrow();
+    await expect(engine.close()).resolves.toBeUndefined();
+    expect(fs.existsSync(indexPath(dir))).toBe(false);
   });
 
-  it("makes subsequent index() throw (connection closed)", async () => {
+  it("makes subsequent search() throw a clear 'Engine is closed' error", async () => {
     const engine = await Engine.open(dir);
     await engine.index();
     await engine.close();
-    await expect(engine.index()).rejects.toThrow();
+    await expect(engine.search("widget")).rejects.toThrow(/Engine is closed/);
+  });
+
+  it("makes subsequent index() throw a clear 'Engine is closed' error", async () => {
+    const engine = await Engine.open(dir);
+    await engine.index();
+    await engine.close();
+    await expect(engine.index()).rejects.toThrow(/Engine is closed/);
   });
 });
 
@@ -168,5 +198,18 @@ describe("Engine.pack — regression guard (unaffected by index wiring)", () => 
     const engine = await Engine.open(dir);
     await engine.pack();
     await expect(engine.close()).resolves.toBeUndefined();
+  });
+
+  it("pack() does NOT create an index.db (lazy IndexDb)", async () => {
+    const cleanDir = await fsp.mkdtemp(path.join(os.tmpdir(), "cv-engine-noidx-"));
+    try {
+      const engine = await Engine.open(cleanDir);
+      const result = await engine.pack();
+      expect(result.content).toBeTypeOf("string");
+      await engine.close();
+      expect(fs.existsSync(indexPath(cleanDir))).toBe(false);
+    } finally {
+      await fsp.rm(cleanDir, { recursive: true, force: true });
+    }
   });
 });

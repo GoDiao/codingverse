@@ -22,7 +22,7 @@ import { ExpandMapStore, type ExpandMapSnapshot } from "./assemble/expand-store.
 import { ParseCache } from "./cache/index.js";
 import { IndexDb, IndexStore, RefResolver, SearchEngine } from "./indexdb/index.js";
 import type { ParseCacheStats } from "@codingverse/shared";
-import { DEFAULT_TOKEN_BUDGET } from "@codingverse/shared";
+import { DEFAULT_TOKEN_BUDGET, STATE_DIR } from "@codingverse/shared";
 
 export interface EngineOptions {
   /** Where to store the index/cache. Defaults to `<repo>/.codingverse`. */
@@ -46,21 +46,49 @@ export class Engine {
   private lastCacheStats: ParseCacheStats = { hits: 0, misses: 0, total: 0 };
   /** Lazily-loaded persistent expand map (from `<repo>/.codingverse/expand-map.json`). */
   private expandStore: ExpandMapStore;
-  /** SQLite index connection (opened in the constructor, closed in close()). */
-  private readonly indexDb: IndexDb;
+  /**
+   * SQLite index connection, opened lazily by ensureIndexDb() only when
+   * index()/search() is first called. pack()/sync()/tokenReport()/expand()
+   * never touch the index, so `cv pack` / `cv status` / `cv expand` no longer
+   * create a surprise `index.db` artifact or fail on an unwritable
+   * `.codingverse/` directory.
+   */
+  private indexDb: IndexDb | null = null;
   private closed = false;
 
   private constructor(repoPath: string, options: EngineOptions) {
     this.repoPath = repoPath;
     this.options = options;
     this.expandStore = new ExpandMapStore(repoPath);
-    this.indexDb = new IndexDb({ repoRoot: repoPath });
-    this.indexDb.migrate();
-    this.indexDb.prepareStatements();
   }
 
   static async open(repoPath: string, opts: EngineOptions = {}): Promise<Engine> {
     return new Engine(repoPath, opts);
+  }
+
+  /**
+   * Open the SQLite index on first use. Throws a clear Engine-level error if
+   * the engine is closed or the index cannot be opened (e.g. EACCES on
+   * `.codingverse/`), so callers don't see opaque native sqlite/fs errors.
+   */
+  private ensureIndexDb(): IndexDb {
+    if (this.closed) {
+      throw new Error("Engine is closed; open a new Engine instance.");
+    }
+    if (!this.indexDb) {
+      try {
+        const db = new IndexDb({ repoRoot: this.repoPath });
+        db.migrate();
+        db.prepareStatements();
+        this.indexDb = db;
+      } catch (e) {
+        const cause = e instanceof Error ? e.message : String(e);
+        throw new Error(
+          `Failed to open index at ${this.repoPath}/${STATE_DIR}/index.db: ${cause}`,
+        );
+      }
+    }
+    return this.indexDb;
   }
 
   /** Stage ①: discover, read, decode, and validate files. */
@@ -100,8 +128,13 @@ export class Engine {
    * Stage ①-③: build / update the index.
    *
    * Pipeline: ingest → parseFilesCached (cross-cutting B parse cache) →
-   * IndexStore.write (SQLite nodes/chunks/files + FTS5) → RefResolver.resolveAll
+   * pruneFiles (drop rows for files no longer on disk) → IndexStore.write
+   * (SQLite nodes/chunks/files + FTS5) → RefResolver.resolveAll
    * (unresolved_refs → edges). Returns aggregate counts.
+   *
+   * Pruning runs BEFORE the write so stale rows for deleted files don't
+   * transiently linger inside the write transaction; without it, searching
+   * would keep returning hits that point at non-existent filePaths.
    *
    * v1 uses a full store.write() rather than writeIncremental(changedPaths):
    * computing the exact set of cache-miss paths here would duplicate the
@@ -113,6 +146,7 @@ export class Engine {
     const start = Date.now();
     const { files: ingested } = await ingest(this.repoPath, {});
     const sources = new Map(ingested.map((f) => [f.path, f.content]));
+    const livePaths = new Set(ingested.map((f) => f.path));
 
     const cache = new ParseCache(this.repoPath);
     await cache.load();
@@ -120,10 +154,12 @@ export class Engine {
     await cache.save();
     this.lastCacheStats = stats;
 
-    const store = new IndexStore(this.indexDb);
+    const db = this.ensureIndexDb();
+    const store = new IndexStore(db);
+    store.pruneFiles(livePaths);
     const storeStats = store.write({ parsed, sources });
 
-    const resolver = new RefResolver(this.indexDb);
+    const resolver = new RefResolver(db);
     const resolveStats = resolver.resolveAll();
 
     return {
@@ -228,7 +264,8 @@ export class Engine {
    * than throwing — SearchEngine handles empty tables gracefully.
    */
   async search(query: string, opts: SearchOptions = {}): Promise<SearchHit[]> {
-    const engine = new SearchEngine(this.indexDb);
+    const db = this.ensureIndexDb();
+    const engine = new SearchEngine(db);
     const rows = engine.search({
       query,
       topK: opts.topK ?? 20,
@@ -308,15 +345,19 @@ export class Engine {
   }
 
   /**
-   * Close the SQLite index connection. Idempotent — safe to call multiple
-   * times. After close(), index()/search() will throw (the underlying
-   * DatabaseSync rejects operations once closed); pack()/expand() are
+   * Close the SQLite index connection if it was opened. Idempotent — safe to
+   * call multiple times, and safe to call when index()/search() were never
+   * used (no IndexDb to close). After close(), index()/search() throw a clear
+   * "Engine is closed" error via ensureIndexDb(); pack()/expand() are
    * unaffected since they never touch the index.
    */
   async close(): Promise<void> {
     if (this.closed) return;
-    this.closed = true;
-    this.indexDb.close();
+    try {
+      this.indexDb?.close();
+    } finally {
+      this.closed = true;
+    }
   }
 
   /** Exposed for early CLI wiring / debugging. */
