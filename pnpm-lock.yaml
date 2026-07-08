@@ -50,6 +50,12 @@ importers:
       jschardet:
         specifier: ^3.1.4
         version: 3.1.4
+      tree-sitter-wasms:
+        specifier: ^0.1.13
+        version: 0.1.13
+      web-tree-sitter:
+        specifier: ^0.25.10
+        version: 0.25.10
     devDependencies:
       '@types/node':
         specifier: ^22.20.0
@@ -565,6 +571,9 @@ packages:
     resolution: {integrity: sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==}
     engines: {node: '>=8.0'}
 
+  tree-sitter-wasms@0.1.13:
+    resolution: {integrity: sha512-wT+cR6DwaIz80/vho3AvSF0N4txuNx/5bcRKoXouOfClpxh/qqrF4URNLQXbbt8MaAxeksZcZd1j8gcGjc+QxQ==}
+
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
@@ -662,6 +671,14 @@ packages:
       happy-dom:
         optional: true
       jsdom:
+        optional: true
+
+  web-tree-sitter@0.25.10:
+    resolution: {integrity: sha512-Y09sF44/13XvgVKgO2cNDw5rGk6s26MgoZPXLESvMXeefBf7i6/73eFurre0IsTW6E14Y0ArIzhUMmjoc7xyzA==}
+    peerDependencies:
+      '@types/emscripten': ^1.40.0
+    peerDependenciesMeta:
+      '@types/emscripten':
         optional: true
 
   why-is-node-running@2.3.0:
@@ -1074,6 +1091,8 @@ snapshots:
     dependencies:
       is-number: 7.0.0
 
+  tree-sitter-wasms@0.1.13: {}
+
   tslib@2.8.1:
     optional: true
 
@@ -1120,6 +1139,8 @@ snapshots:
       '@types/node': 22.20.0
     transitivePeerDependencies:
       - msw
+
+  web-tree-sitter@0.25.10: {}
 
   why-is-node-running@2.3.0:
     dependencies:

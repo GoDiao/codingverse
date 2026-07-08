@@ -8,8 +8,10 @@ import type {
   DashboardStats,
   IngestConfig,
   IngestResult,
+  ParsedFile,
 } from "@codingverse/shared";
 import { ingest } from "./ingest/index.js";
+import { parseFiles } from "./parse/index.js";
 
 export interface EngineOptions {
   /** Where to store the index/cache. Defaults to `<repo>/.codingverse`. */
@@ -40,6 +42,12 @@ export class Engine {
   /** Stage ①: discover, read, decode, and validate files. */
   async ingest(config: IngestConfig = {}): Promise<IngestResult> {
     return ingest(this.repoPath, config);
+  }
+
+  /** Stage ②: parse files → symbols, refs, chunks. */
+  async parse(config: IngestConfig = {}): Promise<ParsedFile[]> {
+    const { files } = await ingest(this.repoPath, config);
+    return parseFiles(files);
   }
 
   /** Stage ①-③: build / update the index. */

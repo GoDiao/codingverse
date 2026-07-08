@@ -60,6 +60,52 @@ export interface IngestResult {
 // Stage ② Parse: symbols & relations
 // ─────────────────────────────────────────────────────────────
 
+/** Supported languages for parsing (M2: typescript/python; extended later). */
+export type Language =
+  | "typescript"
+  | "tsx"
+  | "javascript"
+  | "jsx"
+  | "python"
+  | "go"
+  | "rust"
+  | "java"
+  | "unknown";
+
+/** A raw symbol extracted from the AST, before indexing (no stable id yet). */
+export interface RawSymbol {
+  kind: SymbolKind;
+  name: string;
+  startLine: number;
+  endLine: number;
+  startByte: number;
+  endByte: number;
+  signature?: string;
+  docstring?: string;
+  /** Names of enclosing scopes (outermost first), for qualified name. */
+  scope: string[];
+}
+
+/** A raw reference (call/type/etc.) to another symbol by name. */
+export interface RawRef {
+  /** Referenced symbol name. */
+  name: string;
+  kind: EdgeKind;
+  startLine: number;
+  startByte: number;
+}
+
+/** Result of parsing a single file (stage ②). */
+export interface ParsedFile {
+  path: string;
+  language: Language;
+  symbols: RawSymbol[];
+  refs: RawRef[];
+  chunks: Chunk[];
+  /** True if the parse used a fallback (unsupported lang / parse error). */
+  degraded: boolean;
+}
+
 export type SymbolKind =
   | "function"
   | "method"

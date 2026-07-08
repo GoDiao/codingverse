@@ -27,7 +27,9 @@
     "iconv-lite": "^0.7.3",
     "is-binary-path": "^3.0.0",
     "isbinaryfile": "^6.0.0",
-    "jschardet": "^3.1.4"
+    "jschardet": "^3.1.4",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.25.10"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

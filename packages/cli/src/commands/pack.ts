@@ -11,13 +11,14 @@ export function registerPack(program: Command): void {
     .option("-f, --format <format>", "output format: xml | markdown | json", "xml")
     .option("-b, --budget <tokens>", "token budget", String(128_000))
     .option("--list", "list ingested files only (M1 preview)")
-    .action(async (repoPath: string, opts: { list?: boolean }) => {
+    .option("--symbols", "list extracted symbols per file (M2 preview)")
+    .action(async (repoPath: string, opts: { list?: boolean; symbols?: boolean }) => {
       const absRepo = path.resolve(repoPath);
       const engine = await Engine.open(absRepo);
-      const { files, skipped } = await engine.ingest();
 
-      // M1 preview: list files. Full layered pack lands in M4/M5.
+      // M1 preview: list files.
       if (opts.list) {
+        const { files, skipped } = await engine.ingest();
         for (const f of files) console.log(f.path);
         console.error(
           `\n[cv pack] ingested ${files.length} files, skipped ${skipped.length}`,
@@ -25,6 +26,33 @@ export function registerPack(program: Command): void {
         await engine.close();
         return;
       }
+
+      // M2 preview: parse and list symbols.
+      if (opts.symbols) {
+        const parsed = await engine.parse();
+        let symCount = 0;
+        let chunkCount = 0;
+        let degraded = 0;
+        for (const p of parsed) {
+          if (p.degraded) degraded++;
+          chunkCount += p.chunks.length;
+          if (p.symbols.length === 0) continue;
+          symCount += p.symbols.length;
+          console.log(`\n${p.path} [${p.language}]`);
+          for (const s of p.symbols) {
+            const scope = s.scope.length ? `${s.scope.join("::")}::` : "";
+            console.log(`  ${s.kind.padEnd(10)} ${scope}${s.name}  (L${s.startLine}-${s.endLine})`);
+          }
+        }
+        console.error(
+          `\n[cv pack] parsed ${parsed.length} files: ${symCount} symbols, ` +
+            `${chunkCount} chunks, ${degraded} degraded`,
+        );
+        await engine.close();
+        return;
+      }
+
+      const { files, skipped } = await engine.ingest();
 
       console.error(
         `[cv pack] ingested ${files.length} files, skipped ${skipped.length}. ` +
