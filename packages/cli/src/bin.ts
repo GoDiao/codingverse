@@ -2,6 +2,7 @@
 import { Command } from "commander";
 import { registerPack } from "./commands/pack.js";
 import { registerIndex } from "./commands/index.js";
+import { registerExpand } from "./commands/expand.js";
 import { registerSearch } from "./commands/search.js";
 import { registerStatus } from "./commands/status.js";
 
@@ -16,6 +17,7 @@ program
 
 registerPack(program);
 registerIndex(program);
+registerExpand(program);
 registerSearch(program);
 registerStatus(program);
 

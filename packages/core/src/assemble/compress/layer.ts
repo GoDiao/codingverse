@@ -1,12 +1,20 @@
 import type { Layer } from "@codingverse/shared";
 
 /**
- * Layer selection — greedy budget fitting.
+ * Layer selection — greedy budget fitting with backfill.
  *
- * Each file has a token cost at each available layer (full > skeleton >
- * outline > omit=0). Start everyone at `full`; while over budget, downgrade
- * the least-important file by one layer, repeat until it fits (or everything
- * is omitted).
+ * Two passes:
+ *
+ *   ① Downgrade — start everyone at `full`; while over budget, downgrade
+ *     the least-important file by one layer, repeat until it fits (or
+ *     everything is omitted). Larger current-cost files go first within a
+ *     tier (bigger immediate saving).
+ *
+ *   ② Backfill — after downgrading we may sit well under budget. Walk
+ *     candidates by *descending* importance and promote each to the
+ *     highest layer it can afford with the remaining budget, capped at
+ *     `ceiling` (full for auto; the forced layer for a fixed strategy, so
+ *     `--strategy skeleton` never escalates past skeleton).
  *
  * Importance ranking (M4 heuristic; PageRank precision lands in v2):
  *   alwaysFull whitelist  →  never downgraded (rank +∞)
@@ -82,6 +90,41 @@ export const selectLayers = (
     const victim = queue[0]!;
     const next = nextLayer(layerOf.get(victim.path)!)!;
     layerOf.set(victim.path, next);
+  }
+
+  // Backfill pass: promote files into the leftover budget.
+  // After downgrading we may sit well under budget (e.g. budget 1500 but
+  // total 613 because the last downgrade overshot). Walk candidates by
+  // descending importance and raise each to the highest layer it can
+  // afford, capped at `ceiling` so a forced strategy never escalates past
+  // the user's chosen layer.
+  const ceiling: Layer = strategy === "auto" ? "full" : startLayer;
+  const ceilingIdx = LAYER_ORDER.indexOf(ceiling);
+
+  let remaining = budget - total();
+  if (remaining > 0) {
+    const upgradable = candidates
+      .filter(
+        (c) => !c.pinned && LAYER_ORDER.indexOf(layerOf.get(c.path)!) > ceilingIdx,
+      )
+      .sort((a, b) => b.importance - a.importance || tokensOf(a) - tokensOf(b));
+
+    for (const c of upgradable) {
+      const cur = layerOf.get(c.path)!;
+      const curIdx = LAYER_ORDER.indexOf(cur);
+      const curCost = c.cost[cur];
+      // Try layers from ceiling (richest allowed) down toward cur: pick the
+      // highest layer whose delta fits the remaining budget.
+      for (let i = ceilingIdx; i < curIdx; i++) {
+        const target = LAYER_ORDER[i]!;
+        const delta = c.cost[target] - curCost;
+        if (delta > 0 && delta <= remaining) {
+          layerOf.set(c.path, target);
+          remaining -= delta;
+          break;
+        }
+      }
+    }
   }
 
   const decisions: LayerDecision[] = candidates.map((c) => ({

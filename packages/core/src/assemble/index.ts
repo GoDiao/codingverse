@@ -14,3 +14,4 @@ export {
 } from "./compress/index.js";
 
 export { render, renderTree, type RenderInput } from "./output/index.js";
+export { ExpandMapStore, type ExpandMapSnapshot, type ExpandMapMeta } from "./expand-store.js";

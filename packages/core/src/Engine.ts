@@ -11,14 +11,17 @@ import type {
   ParsedFile,
   Chunk,
   TreemapNode,
+  ExpandEntry,
 } from "@codingverse/shared";
 import fs from "node:fs/promises";
 import { ingest } from "./ingest/index.js";
 import { parseFiles, parseFilesCached } from "./parse/index.js";
 import { TokenBudget, buildTokenTreemap, type FileTokenCount } from "./budget/index.js";
 import { compress, render } from "./assemble/index.js";
+import { ExpandMapStore, type ExpandMapSnapshot } from "./assemble/expand-store.js";
 import { ParseCache } from "./cache/index.js";
 import type { ParseCacheStats } from "@codingverse/shared";
+import { DEFAULT_TOKEN_BUDGET } from "@codingverse/shared";
 
 export interface EngineOptions {
   /** Where to store the index/cache. Defaults to `<repo>/.codingverse`. */
@@ -37,13 +40,16 @@ export class Engine {
   private readonly repoPath: string;
   private readonly options: EngineOptions;
   /** Last pack's expand map (skeleton id → source span), for expand(). */
-  private lastExpandMap: Record<string, import("@codingverse/shared").ExpandEntry> = {};
+  private lastExpandMap: Record<string, ExpandEntry> = {};
   /** Last pack's parse-cache hit/miss stats. */
   private lastCacheStats: ParseCacheStats = { hits: 0, misses: 0, total: 0 };
+  /** Lazily-loaded persistent expand map (from `<repo>/.codingverse/expand-map.json`). */
+  private expandStore: ExpandMapStore;
 
   private constructor(repoPath: string, options: EngineOptions) {
     this.repoPath = repoPath;
     this.options = options;
+    this.expandStore = new ExpandMapStore(repoPath);
   }
 
   static async open(repoPath: string, opts: EngineOptions = {}): Promise<Engine> {
@@ -141,6 +147,16 @@ export class Engine {
     const result = await compress(parsed, sources, opts, this.repoPath);
     this.lastExpandMap = result.expandMap;
 
+    // Persist the expand map so a separate `cv expand <id>` process can
+    // resolve skeleton ids without re-packing.
+    await this.expandStore.save(result.expandMap, {
+      budget: opts.tokenBudget ?? DEFAULT_TOKEN_BUDGET,
+      strategy: opts.layerStrategy ?? "auto",
+      timestamp: Date.now(),
+      fileCount: result.files.filter((f) => f.layer !== "omit").length,
+      tokenCount: result.total,
+    });
+
     // M5: render packed files into the requested format (default XML).
     const content = render(
       {
@@ -167,17 +183,41 @@ export class Engine {
   }
 
   /**
-   * Expand a skeleton symbol by id → its full source text.
-   * Uses the most recent pack's expand map; reads the span from disk.
+   * Resolve a skeleton symbol id to its full source text.
+   * Uses the in-memory expand map from this process's last pack(); if empty
+   * (e.g. a fresh `cv expand` process), loads the persisted expand-map.json.
    */
   async expand(id: string): Promise<string> {
-    const entry = this.lastExpandMap[id];
-    if (!entry) {
-      throw new Error(`Unknown expand id: ${id}. Run pack() first, or the id is stale.`);
-    }
+    const entry = await this.expandEntry(id);
     const absPath = `${this.repoPath}/${entry.path}`;
     const content = await fs.readFile(absPath, "utf8");
     return content.slice(entry.startByte, entry.endByte);
+  }
+
+  /** Resolve a skeleton id to its expand entry (metadata + span). */
+  async expandEntry(id: string): Promise<ExpandEntry> {
+    let map = this.lastExpandMap;
+    if (Object.keys(map).length === 0) {
+      const snap = await this.expandStore.load();
+      map = snap?.entries ?? {};
+      this.lastExpandMap = map;
+    }
+    const entry = map[id];
+    if (!entry) {
+      throw new Error(
+        `Unknown expand id: ${id}. Run \`cv pack\` first, or the id is stale.`,
+      );
+    }
+    return entry;
+  }
+
+  /** List all expandable symbols from the last pack (loads from disk). */
+  async listExpandable(): Promise<ExpandMapSnapshot | null> {
+    if (Object.keys(this.lastExpandMap).length > 0) {
+      // In-memory from a pack in this process — but we don't have the meta
+      // here, so fall through to disk which has both.
+    }
+    return this.expandStore.load();
   }
 
   /** Call-hierarchy: who calls this node. */
