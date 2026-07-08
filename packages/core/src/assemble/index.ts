@@ -12,3 +12,5 @@ export {
   type LayerPlan,
   type LayerDecision,
 } from "./compress/index.js";
+
+export { render, renderTree, type RenderInput } from "./output/index.js";

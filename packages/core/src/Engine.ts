@@ -16,7 +16,7 @@ import fs from "node:fs/promises";
 import { ingest } from "./ingest/index.js";
 import { parseFiles } from "./parse/index.js";
 import { TokenBudget, buildTokenTreemap, type FileTokenCount } from "./budget/index.js";
-import { compress } from "./assemble/index.js";
+import { compress, render } from "./assemble/index.js";
 
 export interface EngineOptions {
   /** Where to store the index/cache. Defaults to `<repo>/.codingverse`. */
@@ -102,14 +102,15 @@ export class Engine {
     const result = await compress(parsed, sources, opts, this.repoPath);
     this.lastExpandMap = result.expandMap;
 
-    // M4 preview assembly: concatenate non-omitted files with a simple header.
-    // (M5 replaces this with format-specific rendering.)
-    const parts: string[] = [];
-    for (const f of result.files) {
-      if (f.layer === "omit") continue;
-      parts.push(`===== ${f.path} [${f.layer}] =====\n${f.content}`);
-    }
-    const content = parts.join("\n\n");
+    // M5: render packed files into the requested format (default XML).
+    const content = render(
+      {
+        files: result.files,
+        tokenCount: result.total,
+        expandableCount: Object.keys(result.expandMap).length,
+      },
+      opts.format ?? "xml",
+    );
 
     return {
       content,

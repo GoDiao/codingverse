@@ -2,7 +2,7 @@ import path from "node:path";
 import { writeFile } from "node:fs/promises";
 import type { Command } from "commander";
 import { Engine } from "@codingverse/core";
-import type { Layer } from "@codingverse/shared";
+import type { Layer, OutputFormat } from "@codingverse/shared";
 
 export function registerPack(program: Command): void {
   program
@@ -10,6 +10,7 @@ export function registerPack(program: Command): void {
     .description("Pack a repository into a layered LLM context file")
     .argument("[path]", "repository path", ".")
     .option("-o, --output <file>", "output file (default: stdout)")
+    .option("-f, --format <format>", "output format: xml | markdown | json", "xml")
     .option("-b, --budget <tokens>", "token budget", String(128_000))
     .option(
       "-s, --strategy <strategy>",
@@ -24,6 +25,7 @@ export function registerPack(program: Command): void {
         repoPath: string,
         opts: {
           output?: string;
+          format: OutputFormat;
           budget: string;
           strategy: "auto" | "full" | "skeleton" | "outline";
           alwaysFull: string;
@@ -79,6 +81,7 @@ export function registerPack(program: Command): void {
         const result = await engine.pack({
           tokenBudget: Number(opts.budget),
           layerStrategy: opts.strategy,
+          format: opts.format,
           alwaysFull,
         });
 
