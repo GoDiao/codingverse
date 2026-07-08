@@ -75,6 +75,37 @@ CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
   content='chunks', content_rowid='rowid'
 );
 
+-- FTS5 sync triggers (external-content tables do not auto-populate;
+-- verified working under node:sqlite — see packages/core/src/indexdb/db.ts).
+CREATE TRIGGER IF NOT EXISTS nodes_fts_ai AFTER INSERT ON nodes BEGIN
+  INSERT INTO nodes_fts(rowid, id, name, qualified_name, docstring, signature)
+  VALUES (new.rowid, new.id, new.name, new.qualified_name, new.docstring, new.signature);
+END;
+CREATE TRIGGER IF NOT EXISTS nodes_fts_ad AFTER DELETE ON nodes BEGIN
+  INSERT INTO nodes_fts(nodes_fts, rowid, id, name, qualified_name, docstring, signature)
+  VALUES ('delete', old.rowid, old.id, old.name, old.qualified_name, old.docstring, old.signature);
+END;
+CREATE TRIGGER IF NOT EXISTS nodes_fts_au AFTER UPDATE ON nodes BEGIN
+  INSERT INTO nodes_fts(nodes_fts, rowid, id, name, qualified_name, docstring, signature)
+  VALUES ('delete', old.rowid, old.id, old.name, old.qualified_name, old.docstring, old.signature);
+  INSERT INTO nodes_fts(rowid, id, name, qualified_name, docstring, signature)
+  VALUES (new.rowid, new.id, new.name, new.qualified_name, new.docstring, new.signature);
+END;
+CREATE TRIGGER IF NOT EXISTS chunks_fts_ai AFTER INSERT ON chunks BEGIN
+  INSERT INTO chunks_fts(rowid, id, body, embedding_tokens)
+  VALUES (new.rowid, new.id, new.body, new.embedding_tokens);
+END;
+CREATE TRIGGER IF NOT EXISTS chunks_fts_ad AFTER DELETE ON chunks BEGIN
+  INSERT INTO chunks_fts(chunks_fts, rowid, id, body, embedding_tokens)
+  VALUES ('delete', old.rowid, old.id, old.body, old.embedding_tokens);
+END;
+CREATE TRIGGER IF NOT EXISTS chunks_fts_au AFTER UPDATE ON chunks BEGIN
+  INSERT INTO chunks_fts(chunks_fts, rowid, id, body, embedding_tokens)
+  VALUES ('delete', old.rowid, old.id, old.body, old.embedding_tokens);
+  INSERT INTO chunks_fts(rowid, id, body, embedding_tokens)
+  VALUES (new.rowid, new.id, new.body, new.embedding_tokens);
+END;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_nodes_name ON nodes(name);
 CREATE INDEX IF NOT EXISTS idx_nodes_file ON nodes(file_path, start_line);
