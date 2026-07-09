@@ -41,6 +41,10 @@ interface OccInput {
   symbol: string;
   symbolRoles?: number;
   line?: number;
+  /** Multi-line range (typed oneof). Overrides `line` when set. */
+  multiLineRange?: { startLine: number; startCharacter: number; endLine: number; endCharacter: number };
+  /** Deprecated repeated-int32 range: [line, startChar, endChar] (3) or [startLine, startChar, endLine, endChar] (4). Overrides typed oneofs when set. */
+  range?: number[];
 }
 interface RelInput {
   symbol: string;
@@ -65,15 +69,20 @@ async function buildScipFile(documents: DocInput[]): Promise<string> {
   const msg = Index.create({
     documents: documents.map((d) => ({
       relativePath: d.relativePath,
-      occurrences: (d.occurrences ?? []).map((o) => ({
-        symbol: o.symbol,
-        symbolRoles: o.symbolRoles ?? 0,
-        singleLineRange: {
-          line: o.line ?? 0,
-          startCharacter: 0,
-          endCharacter: 1,
-        },
-      })),
+      occurrences: (d.occurrences ?? []).map((o) => {
+        const occ: Record<string, unknown> = {
+          symbol: o.symbol,
+          symbolRoles: o.symbolRoles ?? 0,
+        };
+        if (o.range) {
+          occ.range = o.range;
+        } else if (o.multiLineRange) {
+          occ.multiLineRange = o.multiLineRange;
+        } else {
+          occ.singleLineRange = { line: o.line ?? 0, startCharacter: 0, endCharacter: 1 };
+        }
+        return occ;
+      }),
       symbols: (d.symbols ?? []).map((s) => ({
         symbol: s.symbol,
         relationships: (s.relationships ?? []).map((r) => ({
@@ -494,6 +503,124 @@ describe("ScipImporter — occurrence path (scip-typescript style)", () => {
     const rows = allEdges(db);
     expect(rows[0]!.source).toBe(innerId);
     expect(rows[0]!.target).toBe(helperId);
+    db.close();
+  });
+
+  it("recovers the enclosing def via a genuine multiLineRange (reference in body, not on def line)", async () => {
+    const db = mkDb();
+    const outerId = insertNode(db, {
+      filePath: "nest.ts",
+      qualifiedName: "outer",
+      startLine: 1,
+    });
+    const barId = insertNode(db, { filePath: "util.ts", qualifiedName: "bar" });
+
+    // outer's def uses a multiLineRange spanning 0-based lines 0..4 (our
+    // start_line 1). The reference to bar is on 0-based line 2 — strictly
+    // inside outer's body, NOT on outer's def line 0. No inner def exists,
+    // so this genuinely exercises multiLineRange containment (the old test
+    // only passed because single-line def + ref shared the same line).
+    const scipPath = await buildScipFile([
+      {
+        relativePath: "nest.ts",
+        occurrences: [
+          {
+            symbol: SCIP("outer()."),
+            symbolRoles: 1,
+            multiLineRange: { startLine: 0, startCharacter: 0, endLine: 4, endCharacter: 0 },
+          },
+          { symbol: SCIP("bar()."), symbolRoles: 0, line: 2 },
+        ],
+      },
+    ]);
+
+    const importer = new ScipImporter(db);
+    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    expect(stats.occurrences).toBe(2);
+    expect(stats.edgesInserted).toBe(1);
+    const rows = allEdges(db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.source).toBe(outerId);
+    expect(rows[0]!.target).toBe(barId);
+    expect(rows[0]!.provenance).toBe("scip");
+    // edge line = reference occurrence 0-based line 2 + 1 = 3.
+    expect(rows[0]!.line).toBe(3);
+    db.close();
+  });
+
+  it("recovers the enclosing def via a 4-element deprecated range array", async () => {
+    const db = mkDb();
+    const outerId = insertNode(db, {
+      filePath: "nest.ts",
+      qualifiedName: "outer",
+      startLine: 1,
+    });
+    const barId = insertNode(db, { filePath: "util.ts", qualifiedName: "bar" });
+
+    // outer's def uses the deprecated repeated-int32 range with 4 elements
+    // [startLine, startChar, endLine, endChar] = [0,0,4,0] (0-based lines 0..4).
+    // The reference is at 0-based line 3 (inside the body, not the def line).
+    const scipPath = await buildScipFile([
+      {
+        relativePath: "nest.ts",
+        occurrences: [
+          { symbol: SCIP("outer()."), symbolRoles: 1, range: [0, 0, 4, 0] },
+          { symbol: SCIP("bar()."), symbolRoles: 0, range: [3, 4, 3, 8] },
+        ],
+      },
+    ]);
+
+    const importer = new ScipImporter(db);
+    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    expect(stats.edgesInserted).toBe(1);
+    const rows = allEdges(db);
+    expect(rows[0]!.source).toBe(outerId);
+    expect(rows[0]!.target).toBe(barId);
+    expect(rows[0]!.line).toBe(4);
+    db.close();
+  });
+
+  it("skips local-symbol def occurrences so the enclosing function wins containment", async () => {
+    const db = mkDb();
+    const outerId = insertNode(db, {
+      filePath: "nest.ts",
+      qualifiedName: "outer",
+      startLine: 1,
+    });
+    const barId = insertNode(db, { filePath: "util.ts", qualifiedName: "bar" });
+
+    // outer def spans 0-based lines 0..4 (our start_line 1). A local variable
+    // `local x1` is defined at 0-based line 2 (single-line range [2-2]); its
+    // zero-width range would otherwise win innermost containment over outer's
+    // span of 5 lines for the reference at line 2. The reference to bar at
+    // line 2 must therefore resolve to outer, not the local var. Without the
+    // `local ` skip, parseScipSymbolName("local x1") returns "" (only 2 space
+    // tokens → slice(4) empty) → name fallback fails → edge dropped.
+    const scipPath = await buildScipFile([
+      {
+        relativePath: "nest.ts",
+        occurrences: [
+          {
+            symbol: SCIP("outer()."),
+            symbolRoles: 1,
+            multiLineRange: { startLine: 0, startCharacter: 0, endLine: 4, endCharacter: 0 },
+          },
+          // local var def — must be skipped by the defs-building guard.
+          { symbol: "local x1", symbolRoles: 1, line: 2 },
+          // reference to bar on the same 0-based line 2 as the local var.
+          { symbol: SCIP("bar()."), symbolRoles: 0, line: 2 },
+        ],
+      },
+    ]);
+
+    const importer = new ScipImporter(db);
+    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    expect(stats.occurrences).toBe(3);
+    expect(stats.edgesInserted).toBe(1);
+    const rows = allEdges(db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.source).toBe(outerId);
+    expect(rows[0]!.target).toBe(barId);
     db.close();
   });
 

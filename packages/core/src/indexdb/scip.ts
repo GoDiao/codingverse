@@ -306,11 +306,17 @@ export class ScipImporter {
         const pending: PendingEdge[] = [];
 
         // Definition occurrences: line index for source matching + containment
-        // ranges for the occurrence path's enclosing-function recovery.
+        // ranges for the occurrence path's enclosing-function recovery. Local
+        // symbols (`local <hash>`) are document-local and never in our nodes
+        // table, so they're skipped here — otherwise a local-var def with a
+        // zero-width single-line range would win innermost containment over the
+        // enclosing function (whose multi-line range also spans that line),
+        // then fail name matching and drop the edge.
         const defLineBySymbol = new Map<string, number>();
         const defs: DefOcc[] = [];
         for (const occ of occurrences) {
           if ((occ.symbolRoles & SYMBOL_ROLE_DEFINITION) !== 0) {
+            if (occ.symbol.startsWith("local ")) continue;
             const range = occurrenceRange(occ);
             if (!range) continue;
             const def: DefOcc = {
