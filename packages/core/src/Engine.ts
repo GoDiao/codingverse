@@ -38,6 +38,28 @@ export interface EngineOptions {
 }
 
 /**
+ * v2-4: a top-N pagerank row with display metadata, returned by
+ * `Engine.topRankedNodes(n)` for `cv rank` stdout and V2-6 MCP "top symbols".
+ */
+export interface RankedNode {
+  id: string;
+  pagerank: number;
+  filePath: string;
+  startLine: number;
+  qualifiedName?: string;
+  name: string;
+}
+
+interface RankedNodeRow {
+  id: string;
+  pagerank: number | null;
+  file_path: string;
+  start_line: number | null;
+  qualified_name: string | null;
+  name: string;
+}
+
+/**
  * Engine — the facade over the 4-stage pipeline (ingest / parse / index / assemble)
  * plus the two cross-cutting concerns (token budget, incremental cache).
  *
@@ -374,6 +396,51 @@ export class Engine {
   async rank(opts?: RankOptions): Promise<RankStats> {
     const db = this.ensureIndexDb();
     return new PageRank(db).rank(opts);
+  }
+
+  /**
+   * v2-4: top-N nodes by pagerank with display metadata (file, line, name),
+   * for `cv rank` stdout and V2-6 MCP "top symbols". Ordered by pagerank
+   * desc, then id asc for determinism. When the index was never ranked
+   * (all pagerank = 0), rows still come back in id order — callers can
+   * detect that case via pagerank === 0 and surface a "run `cv rank` first"
+   * hint. n is clamped to >=1.
+   */
+  async topRankedNodes(n: number): Promise<RankedNode[]> {
+    const db = this.ensureIndexDb();
+    const stmt = db.db.prepare(
+      `SELECT id, pagerank, file_path, start_line, qualified_name, name
+       FROM nodes
+       ORDER BY pagerank DESC, id ASC
+       LIMIT ?`,
+    );
+    const rows = stmt.all(Math.max(1, n)) as unknown as RankedNodeRow[];
+    return rows.map((r) => ({
+      id: r.id,
+      pagerank: r.pagerank ?? 0,
+      filePath: r.file_path,
+      startLine: r.start_line ?? 0,
+      qualifiedName: r.qualified_name ?? undefined,
+      name: r.name,
+    }));
+  }
+
+  /**
+   * v2-4: resolve a CLI argument to a node id. Accepts either a 16-char
+   * hex id (used directly) or a symbol name (looked up via the first
+   * `nodes.name = ?` match). Throws `no node named '<arg>' found` when a
+   * name argument matches nothing, so the CLI catch block surfaces it on
+   * stderr with exit 1. A hex-shaped id is NOT existence-checked here —
+   * downstream CallGraph.callers/callees/impact throw `Unknown node id`
+   * if it doesn't exist, which the CLI also surfaces.
+   */
+  async resolveNodeId(arg: string): Promise<string> {
+    if (/^[0-9a-f]{16}$/.test(arg)) return arg;
+    const db = this.ensureIndexDb();
+    const stmt = db.db.prepare("SELECT id FROM nodes WHERE name = ? LIMIT 1");
+    const row = stmt.get(arg) as { id: string } | undefined;
+    if (!row) throw new Error(`no node named '${arg}' found`);
+    return row.id;
   }
 
   /**

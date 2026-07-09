@@ -331,6 +331,62 @@ describe("Engine.rank — PageRank wiring (v2)", () => {
   });
 });
 
+describe("Engine.topRankedNodes — v2-4", () => {
+  it("returns top-N nodes ordered by pagerank desc with display metadata", async () => {
+    await fsp.writeFile(path.join(dir, "hub.ts"), HUB);
+    const engine = await Engine.open(dir);
+    await engine.index();
+    await engine.rank();
+
+    const top = await engine.topRankedNodes(3);
+    expect(top).toHaveLength(3);
+    // desc ordering
+    expect(top[0]!.pagerank).toBeGreaterThanOrEqual(top[1]!.pagerank);
+    expect(top[1]!.pagerank).toBeGreaterThanOrEqual(top[2]!.pagerank);
+    // shape
+    const hubId = symbolId("hub.ts", "hub");
+    const hubRow = top.find((r) => r.id === hubId);
+    expect(hubRow).toBeDefined();
+    expect(hubRow!.pagerank).toBeGreaterThan(0);
+    expect(hubRow!.filePath).toBe("hub.ts");
+    expect(typeof hubRow!.startLine).toBe("number");
+    expect(hubRow!.name).toBe("hub");
+    await engine.close();
+  });
+
+  it("hub outranks leaf in topRankedNodes", async () => {
+    await fsp.writeFile(path.join(dir, "hub.ts"), HUB);
+    const engine = await Engine.open(dir);
+    await engine.index();
+    await engine.rank();
+    const top = await engine.topRankedNodes(10);
+    const hubRank = top.find((r) => r.name === "hub")!.pagerank;
+    const leafRank = top.find((r) => r.name === "leaf")!.pagerank;
+    expect(hubRank).toBeGreaterThan(leafRank);
+    await engine.close();
+  });
+
+  it("resolves a name to its node id, and passes hex ids through", async () => {
+    await fsp.writeFile(path.join(dir, "hub.ts"), HUB);
+    const engine = await Engine.open(dir);
+    await engine.index();
+    const hubId = symbolId("hub.ts", "hub");
+    expect(await engine.resolveNodeId("hub")).toBe(hubId);
+    expect(await engine.resolveNodeId(hubId)).toBe(hubId);
+    await engine.close();
+  });
+
+  it("resolveNodeId throws 'no node named ...' for an unknown name", async () => {
+    await fsp.writeFile(path.join(dir, "hub.ts"), HUB);
+    const engine = await Engine.open(dir);
+    await engine.index();
+    await expect(engine.resolveNodeId("doesNotExist")).rejects.toThrow(
+      /no node named 'doesNotExist' found/,
+    );
+    await engine.close();
+  });
+});
+
 describe("Engine.pack — pagerank-aware layer selection (v2)", () => {
   it("pack() without rank falls back to v1 heuristics (no regression)", async () => {
     const clean = await fsp.mkdtemp(path.join(os.tmpdir(), "cv-v2-pack-v1-"));
