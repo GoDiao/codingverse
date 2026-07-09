@@ -433,11 +433,20 @@ export class Engine {
    * stderr with exit 1. A hex-shaped id is NOT existence-checked here —
    * downstream CallGraph.callers/callees/impact throw `Unknown node id`
    * if it doesn't exist, which the CLI also surfaces.
+   *
+   * Determinism: the name lookup uses `ORDER BY id ASC LIMIT 1` so that
+   * when multiple symbols share a name (~5% of nodes in a typical repo),
+   * the same id is returned every run. Without ORDER BY, SQLite's row
+   * order is unspecified → non-deterministic CLI targeting. id is
+   * `hash(file_path + qualified_name)`, content-stable across re-indexes,
+   * so the smallest-id pick is stable across rebuilds too.
    */
   async resolveNodeId(arg: string): Promise<string> {
     if (/^[0-9a-f]{16}$/.test(arg)) return arg;
     const db = this.ensureIndexDb();
-    const stmt = db.db.prepare("SELECT id FROM nodes WHERE name = ? LIMIT 1");
+    const stmt = db.db.prepare(
+      "SELECT id FROM nodes WHERE name = ? ORDER BY id ASC LIMIT 1",
+    );
     const row = stmt.get(arg) as { id: string } | undefined;
     if (!row) throw new Error(`no node named '${arg}' found`);
     return row.id;

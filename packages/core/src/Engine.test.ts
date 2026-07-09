@@ -385,6 +385,35 @@ describe("Engine.topRankedNodes — v2-4", () => {
     );
     await engine.close();
   });
+
+  it("resolveNodeId is deterministic when multiple symbols share a name (ORDER BY id ASC)", async () => {
+    // Two files each define `sharedName`. Without ORDER BY, SQLite's row
+    // order is unspecified → non-deterministic which id wins. With
+    // ORDER BY id ASC, the smaller id is returned every time, stable
+    // across calls and across re-indexes (id is content-stable).
+    await fsp.writeFile(
+      path.join(dir, "a.ts"),
+      "export function sharedName() { return 1; }\n",
+    );
+    await fsp.writeFile(
+      path.join(dir, "b.ts"),
+      "export function sharedName() { return 2; }\n",
+    );
+    const engine = await Engine.open(dir);
+    await engine.index();
+
+    const idA = symbolId("a.ts", "sharedName");
+    const idB = symbolId("b.ts", "sharedName");
+    const smaller = idA < idB ? idA : idB;
+
+    // Two independent resolves return the same id (determinism).
+    const first = await engine.resolveNodeId("sharedName");
+    const second = await engine.resolveNodeId("sharedName");
+    expect(first).toBe(second);
+    // And it is the smallest id (ORDER BY id ASC).
+    expect(first).toBe(smaller);
+    await engine.close();
+  });
 });
 
 describe("Engine.pack — pagerank-aware layer selection (v2)", () => {
