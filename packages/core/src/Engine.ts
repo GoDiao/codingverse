@@ -384,6 +384,25 @@ export class Engine {
   }
 
   /**
+   * v2-final-fix: full callers result (nodes + edges + byDepth + truncated)
+   * for CLI/MCP to print depth-grouped output (mirrors `cv impact`). The
+   * simple `callers()` keeps the SymbolNode[] contract from design.md and
+   * V2-6 MCP; this is the richer variant `cv callers` calls when it needs
+   * `--- depth N ---` grouping. callers/callees do no container drill-down,
+   * so `truncated` is always false, but the field is present for symmetry.
+   */
+  async callersGraph(nodeId: string, depth = 1): Promise<GraphResult> {
+    const db = this.ensureIndexDb();
+    return new CallGraph(db).callers(nodeId, depth);
+  }
+
+  /** v2-final-fix: full callees result — see {@link callersGraph}. */
+  async calleesGraph(nodeId: string, depth = 1): Promise<GraphResult> {
+    const db = this.ensureIndexDb();
+    return new CallGraph(db).callees(nodeId, depth);
+  }
+
+  /**
    * v2-fix: full impact result (nodes + edges + byDepth + truncated) for
    * CLI/MCP to surface the container-cap cut. `impact()` keeps the simple
    * SymbolNode[] contract from design.md; this is the richer variant V2-4

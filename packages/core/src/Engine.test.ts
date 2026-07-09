@@ -293,6 +293,42 @@ describe("Engine.callers/callees/impact — CallGraph wiring (v2)", () => {
     await engine.close();
   });
 
+  it("callersGraph(cId, 2) returns a GraphResult with byDepth[0]=start, byDepth[1]=depth-1 callers", async () => {
+    await fsp.writeFile(path.join(dir, "chain.ts"), CHAIN);
+    const engine = await Engine.open(dir);
+    await engine.index();
+    const cId = symbolId("chain.ts", "c");
+    const bId = symbolId("chain.ts", "b");
+    const res = await engine.callersGraph(cId, 2);
+    expect(Array.isArray(res.nodes)).toBe(true);
+    expect(Array.isArray(res.edges)).toBe(true);
+    expect(Array.isArray(res.byDepth)).toBe(true);
+    expect(res.byDepth[0]).toHaveLength(1);
+    expect(res.byDepth[0]![0]!.id).toBe(cId);
+    expect(res.byDepth[1]!.map((n) => n.id)).toEqual([bId]);
+    expect(typeof res.truncated).toBe("boolean");
+    expect(res.truncated).toBe(false);
+    await engine.close();
+  });
+
+  it("calleesGraph(aId, 2) returns a GraphResult with byDepth[0]=start, byDepth[1]=depth-1 callees", async () => {
+    await fsp.writeFile(path.join(dir, "chain.ts"), CHAIN);
+    const engine = await Engine.open(dir);
+    await engine.index();
+    const aId = symbolId("chain.ts", "a");
+    const bId = symbolId("chain.ts", "b");
+    const res = await engine.calleesGraph(aId, 2);
+    expect(Array.isArray(res.nodes)).toBe(true);
+    expect(Array.isArray(res.edges)).toBe(true);
+    expect(Array.isArray(res.byDepth)).toBe(true);
+    expect(res.byDepth[0]).toHaveLength(1);
+    expect(res.byDepth[0]![0]!.id).toBe(aId);
+    expect(res.byDepth[1]!.map((n) => n.id)).toEqual([bId]);
+    expect(typeof res.truncated).toBe("boolean");
+    expect(res.truncated).toBe(false);
+    await engine.close();
+  });
+
   it("callers/callees/impact throw on an unknown node id", async () => {
     const engine = await Engine.open(dir);
     await engine.index();

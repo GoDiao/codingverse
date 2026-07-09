@@ -25,13 +25,16 @@ export function registerCallees(program: Command): void {
         try {
           const nodeId = await engine.resolveNodeId(nodeArg);
           const start = Date.now();
-          const nodes = await engine.callees(nodeId, depth);
+          const res = await engine.calleesGraph(nodeId, depth);
           const durationMs = Date.now() - start;
 
-          for (const n of nodes) console.log(formatNode(n));
+          for (let d = 0; d < res.byDepth.length; d++) {
+            console.log(`--- depth ${d} ---`);
+            for (const n of res.byDepth[d]!) console.log(formatNode(n));
+          }
 
           console.error(
-            `[cv callees] ${nodes.length} nodes in ${durationMs}ms (depth ${depth})`,
+            `[cv callees] ${res.nodes.length} nodes in ${durationMs}ms (depth ${depth})`,
           );
         } catch (err: unknown) {
           console.error(err instanceof Error ? err.message : String(err));
