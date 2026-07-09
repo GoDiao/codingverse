@@ -1,5 +1,5 @@
 /**
- * codingverse MCP server — wires the 4 tools to a stdio JSON-RPC transport.
+ * codingverse MCP server — wires the 7 tools to a stdio JSON-RPC transport.
  *
  * Uses the low-level `Server` + `setRequestHandler` API from the MCP SDK
  * (stable in v1.29.0; the high-level `McpServer` is the newer alternative but

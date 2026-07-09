@@ -1,11 +1,14 @@
 /**
  * Tool definitions + handlers for the codingverse MCP server.
  *
- * Exposes 4 tools over the codingverse Engine:
+ * Exposes 7 tools over the codingverse Engine:
  *   - search:    BM25 + co-location RRF search over the index
  *   - pack:      layered compression into a single LLM context
  *   - expand:    resolve a skeleton symbol id back to full source text
  *   - get_file:  read a file from the repo (path-traversal guarded)
+ *   - callers:   reverse BFS along call edges (who calls this symbol)
+ *   - callees:   forward BFS along call edges (what this symbol calls)
+ *   - impact:    impact radius with container drill-down (what breaks if X changes)
  *
  * A per-projectPath Engine cache (Map) avoids re-opening the engine on every
  * call. Engine.open() is cheap (lazy IndexDb — V1-5), so the cache is mostly
@@ -148,7 +151,65 @@ async function handleGetFile(args: Record<string, unknown>): Promise<CallToolRes
   return textResult(content);
 }
 
-/** The 4 tool definitions advertised to MCP clients. */
+/** Coerce args.depth to a finite number, or return the given default. */
+function depthArg(value: unknown, fallback: number): number {
+  if (value === undefined || value === null) return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/** callers tool: reverse BFS along call edges, returns {count, nodes} JSON. */
+async function handleCallers(args: Record<string, unknown>): Promise<CallToolResult> {
+  const nodeIdArg = asString(args.nodeId);
+  const projectPath = asString(args.projectPath);
+  if (!nodeIdArg) return errorResult("Parameter 'nodeId' is required.");
+  if (!projectPath) return errorResult("Parameter 'projectPath' is required.");
+
+  const engine = await getEngine(projectPath);
+  const id = await engine.resolveNodeId(nodeIdArg);
+  const nodes = await engine.callers(id, depthArg(args.depth, 1));
+  return textResult(JSON.stringify({ count: nodes.length, nodes }, null, 2));
+}
+
+/** callees tool: forward BFS along call edges, returns {count, nodes} JSON. */
+async function handleCallees(args: Record<string, unknown>): Promise<CallToolResult> {
+  const nodeIdArg = asString(args.nodeId);
+  const projectPath = asString(args.projectPath);
+  if (!nodeIdArg) return errorResult("Parameter 'nodeId' is required.");
+  if (!projectPath) return errorResult("Parameter 'projectPath' is required.");
+
+  const engine = await getEngine(projectPath);
+  const id = await engine.resolveNodeId(nodeIdArg);
+  const nodes = await engine.callees(id, depthArg(args.depth, 1));
+  return textResult(JSON.stringify({ count: nodes.length, nodes }, null, 2));
+}
+
+/** impact tool: reverse BFS with container drill-down, returns GraphResult JSON. */
+async function handleImpact(args: Record<string, unknown>): Promise<CallToolResult> {
+  const nodeIdArg = asString(args.nodeId);
+  const projectPath = asString(args.projectPath);
+  if (!nodeIdArg) return errorResult("Parameter 'nodeId' is required.");
+  if (!projectPath) return errorResult("Parameter 'projectPath' is required.");
+
+  const engine = await getEngine(projectPath);
+  const id = await engine.resolveNodeId(nodeIdArg);
+  const res = await engine.impactGraph(id, depthArg(args.depth, 3));
+  return textResult(
+    JSON.stringify(
+      {
+        count: res.nodes.length,
+        nodes: res.nodes,
+        edges: res.edges,
+        byDepth: res.byDepth,
+        truncated: res.truncated,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+/** The 7 tool definitions advertised to MCP clients. */
 const TOOL_DEFINITIONS: Tool[] = [
   {
     name: "search",
@@ -241,6 +302,84 @@ const TOOL_DEFINITIONS: Tool[] = [
       required: ["path", "projectPath"],
     },
   },
+  {
+    name: "callers",
+    description:
+      "Find functions/methods that call the given symbol (reverse BFS along call edges). " +
+      "Returns SymbolNode[] with file paths and pagerank. Use a name or 16-char hex id.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        nodeId: {
+          type: "string",
+          description:
+            "Symbol node id (16-char hex) OR symbol name (resolved via SELECT id FROM nodes WHERE name = ?).",
+        },
+        depth: {
+          type: "number",
+          default: 1,
+          description: "BFS depth (callers/callees default 1, impact default 3).",
+        },
+        projectPath: {
+          type: "string",
+          description: "Absolute path to the repository root.",
+        },
+      },
+      required: ["nodeId", "projectPath"],
+    },
+  },
+  {
+    name: "callees",
+    description:
+      "Find functions/methods that the given symbol calls (forward BFS). Returns SymbolNode[].",
+    inputSchema: {
+      type: "object",
+      properties: {
+        nodeId: {
+          type: "string",
+          description:
+            "Symbol node id (16-char hex) OR symbol name (resolved via SELECT id FROM nodes WHERE name = ?).",
+        },
+        depth: {
+          type: "number",
+          default: 1,
+          description: "BFS depth (callers/callees default 1, impact default 3).",
+        },
+        projectPath: {
+          type: "string",
+          description: "Absolute path to the repository root.",
+        },
+      },
+      required: ["nodeId", "projectPath"],
+    },
+  },
+  {
+    name: "impact",
+    description:
+      "Compute the impact radius of changing a symbol — reverse BFS with container drill-down " +
+      "(changing a class method tracks all callers of sibling methods too). Returns nodes grouped " +
+      "by depth + a truncated flag if the 50-node/layer cap was hit. Useful for 'what will break if I change X'.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        nodeId: {
+          type: "string",
+          description:
+            "Symbol node id (16-char hex) OR symbol name (resolved via SELECT id FROM nodes WHERE name = ?).",
+        },
+        depth: {
+          type: "number",
+          default: 3,
+          description: "BFS depth (callers/callees default 1, impact default 3).",
+        },
+        projectPath: {
+          type: "string",
+          description: "Absolute path to the repository root.",
+        },
+      },
+      required: ["nodeId", "projectPath"],
+    },
+  },
 ];
 
 /** Return the list of tools advertised to MCP clients. */
@@ -266,6 +405,12 @@ export async function callTool(
         return await handleExpand(args);
       case "get_file":
         return await handleGetFile(args);
+      case "callers":
+        return await handleCallers(args);
+      case "callees":
+        return await handleCallees(args);
+      case "impact":
+        return await handleImpact(args);
       default:
         return errorResult(`Unknown tool: ${name}`);
     }
