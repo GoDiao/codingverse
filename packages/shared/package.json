@@ -8,13 +8,15 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./schema.sql": "./src/schema.sql"
+    "./schema.sql": "./src/schema.sql",
+    "./scip.proto": "./src/scip.proto"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "src/schema.sql"
+    "src/schema.sql",
+    "src/scip.proto"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

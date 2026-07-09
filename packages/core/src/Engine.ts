@@ -26,9 +26,16 @@ import {
   IndexStore,
   PageRank,
   RefResolver,
+  ScipImporter,
   SearchEngine,
 } from "./indexdb/index.js";
-import type { RankOptions, RankStats, GraphResult } from "./indexdb/index.js";
+import type {
+  RankOptions,
+  RankStats,
+  GraphResult,
+  ScipImportOptions,
+  ScipImportStats,
+} from "./indexdb/index.js";
 import type { ParseCacheStats } from "@codingverse/shared";
 import { DEFAULT_TOKEN_BUDGET, STATE_DIR } from "@codingverse/shared";
 
@@ -423,6 +430,18 @@ export class Engine {
       qualifiedName: r.qualified_name ?? undefined,
       name: r.name,
     }));
+  }
+
+  /**
+   * v2-5: import precise edges from a .scip index file (Sourcegraph SCIP),
+   * replacing heuristic edges for the files the .scip covers. Delegates to
+   * ScipImporter against the lazily-opened index. Requires the optional
+   * `protobufjs` dependency; throws a clear install hint when it is missing.
+   * Run after `index()` so nodes exist to match SCIP symbols against.
+   */
+  async importScip(opts: ScipImportOptions): Promise<ScipImportStats> {
+    const db = this.ensureIndexDb();
+    return new ScipImporter(db).import(opts);
   }
 
   /**

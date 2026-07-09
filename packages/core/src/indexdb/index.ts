@@ -4,6 +4,11 @@
 export { IndexDb, type DbOptions } from "./db.js";
 export { IndexStore, type StoreInput, type StoreStats } from "./store.js";
 export { RefResolver, type ResolveStats } from "./resolve.js";
+export {
+  ScipImporter,
+  type ScipImportOptions,
+  type ScipImportStats,
+} from "./scip.js";
 export { SearchEngine, type SearchParams, type SearchRow } from "./search.js";
 export { CallGraph, type GraphResult } from "./graph.js";
 export { PageRank, type RankOptions, type RankStats } from "./rank.js";

@@ -1,0 +1,424 @@
+// SCIP (Sourcegraph Code Intelligence Protocol) protobuf schema.
+// Vendored from https://github.com/sourcegraph/scip/blob/main/scip.proto
+// Used by codingverse v2 V2-5 to parse .scip index files via protobufjs.
+// Licensing: Apache 2.0 (SCIP project).
+
+syntax = "proto3";
+
+package scip;
+
+option go_package = "github.com/scip-code/scip/bindings/go/scip/";
+option java_multiple_files = true;
+option java_outer_classname = "ScipProto";
+option java_package = "org.scip_code.scip";
+
+message Index {
+  Metadata metadata = 1;
+  repeated Document documents = 2;
+  repeated SymbolInformation external_symbols = 3;
+}
+
+message Metadata {
+  ProtocolVersion version = 1;
+  ToolInfo tool_info = 2;
+  string project_root = 3;
+  TextEncoding text_document_encoding = 4;
+}
+
+enum ProtocolVersion {
+  UnspecifiedProtocolVersion = 0;
+}
+
+enum TextEncoding {
+  UnspecifiedTextEncoding = 0;
+  UTF8 = 1;
+  UTF16 = 2;
+}
+
+message ToolInfo {
+  string name = 1;
+  string version = 2;
+  repeated string arguments = 3;
+}
+
+message Document {
+  string language = 4;
+  string relative_path = 1;
+  repeated Occurrence occurrences = 2;
+  repeated SymbolInformation symbols = 3;
+  string text = 5;
+  PositionEncoding position_encoding = 6;
+}
+
+enum PositionEncoding {
+  UnspecifiedPositionEncoding = 0;
+  UTF8CodeUnitOffsetFromLineStart = 1;
+  UTF16CodeUnitOffsetFromLineStart = 2;
+  UTF32CodeUnitOffsetFromLineStart = 3;
+}
+
+message Symbol {
+  string scheme = 1;
+  Package package = 2;
+  repeated Descriptor descriptors = 3;
+}
+
+message Package {
+  string manager = 1;
+  string name = 2;
+  string version = 3;
+}
+
+message Descriptor {
+  enum Suffix {
+    option allow_alias = true;
+    UnspecifiedSuffix = 0;
+    Namespace = 1;
+    Package = 1 [deprecated = true];
+    Type = 2;
+    Term = 3;
+    Method = 4;
+    TypeParameter = 5;
+    Parameter = 6;
+    Meta = 7;
+    Local = 8;
+    Macro = 9;
+  }
+  string name = 1;
+  string disambiguator = 2;
+  Suffix suffix = 3;
+}
+
+message Signature {
+  string language = 4;
+  string text = 5;
+  repeated Occurrence occurrences = 2;
+  reserved 1, 3, 6;
+}
+
+message SymbolInformation {
+  string symbol = 1;
+  repeated string documentation = 3;
+  repeated Relationship relationships = 4;
+  Kind kind = 5;
+  enum Kind {
+    UnspecifiedKind = 0;
+    AbstractMethod = 66;
+    Accessor = 72;
+    Array = 1;
+    Assertion = 2;
+    AssociatedType = 3;
+    Attribute = 4;
+    Axiom = 5;
+    Boolean = 6;
+    Class = 7;
+    Concept = 86;
+    Constant = 8;
+    Constructor = 9;
+    Contract = 62;
+    DataFamily = 10;
+    Delegate = 73;
+    Enum = 11;
+    EnumMember = 12;
+    Error = 63;
+    Event = 13;
+    Extension = 84;
+    Fact = 14;
+    Field = 15;
+    File = 16;
+    Function = 17;
+    Getter = 18;
+    Grammar = 19;
+    Instance = 20;
+    Interface = 21;
+    Key = 22;
+    Lang = 23;
+    Lemma = 24;
+    Library = 64;
+    Macro = 25;
+    Method = 26;
+    MethodAlias = 74;
+    MethodReceiver = 27;
+    MethodSpecification = 67;
+    Message = 28;
+    Mixin = 85;
+    Modifier = 65;
+    Module = 29;
+    Namespace = 30;
+    Null = 31;
+    Number = 32;
+    Object = 33;
+    Operator = 34;
+    Package = 35;
+    PackageObject = 36;
+    Parameter = 37;
+    ParameterLabel = 38;
+    Pattern = 39;
+    Predicate = 40;
+    Property = 41;
+    Protocol = 42;
+    ProtocolMethod = 68;
+    PureVirtualMethod = 69;
+    Quasiquoter = 43;
+    SelfParameter = 44;
+    Setter = 45;
+    Signature = 46;
+    SingletonClass = 75;
+    SingletonMethod = 76;
+    StaticDataMember = 77;
+    StaticEvent = 78;
+    StaticField = 79;
+    StaticMethod = 80;
+    StaticProperty = 81;
+    StaticVariable = 82;
+    String = 48;
+    Struct = 49;
+    Subscript = 47;
+    Tactic = 50;
+    Theorem = 51;
+    ThisParameter = 52;
+    Trait = 53;
+    TraitMethod = 70;
+    Type = 54;
+    TypeAlias = 55;
+    TypeClass = 56;
+    TypeClassMethod = 71;
+    TypeFamily = 57;
+    TypeParameter = 58;
+    Union = 59;
+    Value = 60;
+    Variable = 61;
+  }
+  string display_name = 6;
+  Signature signature_documentation = 7;
+  string enclosing_symbol = 8;
+}
+
+message Relationship {
+  string symbol = 1;
+  bool is_reference = 2;
+  bool is_implementation = 3;
+  bool is_type_definition = 4;
+  bool is_definition = 5;
+}
+
+enum SymbolRole {
+  UnspecifiedSymbolRole = 0;
+  Definition = 0x1;
+  Import = 0x2;
+  WriteAccess = 0x4;
+  ReadAccess = 0x8;
+  Generated = 0x10;
+  Test = 0x20;
+  ForwardDefinition = 0x40;
+}
+
+enum SyntaxKind {
+  option allow_alias = true;
+  UnspecifiedSyntaxKind = 0;
+  Comment = 1;
+  PunctuationDelimiter = 2;
+  PunctuationBracket = 3;
+  Keyword = 4;
+  IdentifierKeyword = 4 [deprecated = true];
+  IdentifierOperator = 5;
+  Identifier = 6;
+  IdentifierBuiltin = 7;
+  IdentifierNull = 8;
+  IdentifierConstant = 9;
+  IdentifierMutableGlobal = 10;
+  IdentifierParameter = 11;
+  IdentifierLocal = 12;
+  IdentifierShadowed = 13;
+  IdentifierNamespace = 14;
+  IdentifierModule = 14 [deprecated = true];
+  IdentifierFunction = 15;
+  IdentifierFunctionDefinition = 16;
+  IdentifierMacro = 17;
+  IdentifierMacroDefinition = 18;
+  IdentifierType = 19;
+  IdentifierBuiltinType = 20;
+  IdentifierAttribute = 21;
+  RegexEscape = 22;
+  RegexRepeated = 23;
+  RegexWildcard = 24;
+  RegexDelimiter = 25;
+  RegexJoin = 26;
+  StringLiteral = 27;
+  StringLiteralEscape = 28;
+  StringLiteralSpecial = 29;
+  StringLiteralKey = 30;
+  CharacterLiteral = 31;
+  NumericLiteral = 32;
+  BooleanLiteral = 33;
+  Tag = 34;
+  TagAttribute = 35;
+  TagDelimiter = 36;
+}
+
+message SingleLineRange {
+  int32 line = 1;
+  int32 start_character = 2;
+  int32 end_character = 3;
+}
+
+message MultiLineRange {
+  int32 start_line = 1;
+  int32 start_character = 2;
+  int32 end_line = 3;
+  int32 end_character = 4;
+}
+
+message Occurrence {
+  repeated int32 range = 1 [deprecated = true];
+  oneof typed_range {
+    SingleLineRange single_line_range = 8;
+    MultiLineRange multi_line_range = 9;
+  }
+  string symbol = 2;
+  int32 symbol_roles = 3;
+  repeated string override_documentation = 4;
+  SyntaxKind syntax_kind = 5;
+  repeated Diagnostic diagnostics = 6;
+  repeated int32 enclosing_range = 7 [deprecated = true];
+  oneof typed_enclosing_range {
+    SingleLineRange single_line_enclosing_range = 10;
+    MultiLineRange multi_line_enclosing_range = 11;
+  }
+}
+
+message Diagnostic {
+  Severity severity = 1;
+  string code = 2;
+  string message = 3;
+  string source = 4;
+  repeated DiagnosticTag tags = 5;
+}
+
+enum Severity {
+  UnspecifiedSeverity = 0;
+  Error = 1;
+  Warning = 2;
+  Information = 3;
+  Hint = 4;
+}
+
+enum DiagnosticTag {
+  UnspecifiedDiagnosticTag = 0;
+  Unnecessary = 1;
+  Deprecated = 2;
+}
+
+enum Language {
+  UnspecifiedLanguage = 0;
+  ABAP = 60;
+  Apex = 96;
+  APL = 49;
+  Ada = 39;
+  Agda = 45;
+  AsciiDoc = 86;
+  Assembly = 58;
+  Awk = 66;
+  Bat = 68;
+  BibTeX = 81;
+  C = 34;
+  COBOL = 59;
+  CPP = 35;
+  CSS = 26;
+  CSharp = 1;
+  Clojure = 8;
+  Coffeescript = 21;
+  CommonLisp = 9;
+  Coq = 47;
+  CUDA = 97;
+  Dart = 3;
+  Delphi = 57;
+  Diff = 88;
+  Dockerfile = 80;
+  Dyalog = 50;
+  Elixir = 17;
+  Erlang = 18;
+  FSharp = 42;
+  Fish = 65;
+  Flow = 24;
+  Fortran = 56;
+  Git_Commit = 91;
+  Git_Config = 89;
+  Git_Rebase = 92;
+  Go = 33;
+  GraphQL = 98;
+  Groovy = 7;
+  HTML = 30;
+  Hack = 20;
+  Handlebars = 90;
+  Haskell = 44;
+  Idris = 46;
+  Ini = 72;
+  J = 51;
+  JSON = 75;
+  Java = 6;
+  JavaScript = 22;
+  JavaScriptReact = 93;
+  Jsonnet = 76;
+  Julia = 55;
+  Justfile = 109;
+  Kotlin = 4;
+  LaTeX = 83;
+  Lean = 48;
+  Less = 27;
+  Lua = 12;
+  Luau = 108;
+  Makefile = 79;
+  Markdown = 84;
+  Matlab = 52;
+  Nickel = 110;
+  Nix = 77;
+  OCaml = 41;
+  Objective_C = 36;
+  Objective_CPP = 37;
+  Odin = 111;
+  Pascal = 99;
+  PHP = 19;
+  PLSQL = 70;
+  Perl = 13;
+  PowerShell = 67;
+  Prolog = 71;
+  Protobuf = 100;
+  Python = 15;
+  R = 54;
+  Racket = 11;
+  Raku = 14;
+  Razor = 62;
+  Repro = 102;
+  ReST = 85;
+  Ruby = 16;
+  Rust = 40;
+  SAS = 61;
+  SCSS = 29;
+  SML = 43;
+  SQL = 69;
+  Sass = 28;
+  Scala = 5;
+  Scheme = 10;
+  ShellScript = 64;
+  Skylark = 78;
+  Slang = 107;
+  Solidity = 95;
+  Svelte = 106;
+  Swift = 2;
+  Tcl = 101;
+  TOML = 73;
+  TeX = 82;
+  Thrift = 103;
+  TypeScript = 23;
+  TypeScriptReact = 94;
+  Verilog = 104;
+  VHDL = 105;
+  VisualBasic = 63;
+  Vue = 25;
+  Wolfram = 53;
+  XML = 31;
+  XSL = 32;
+  YAML = 74;
+  Zig = 38;
+}
