@@ -20,7 +20,15 @@ import { TokenBudget, buildTokenTreemap, type FileTokenCount } from "./budget/in
 import { compress, render } from "./assemble/index.js";
 import { ExpandMapStore, type ExpandMapSnapshot } from "./assemble/expand-store.js";
 import { ParseCache } from "./cache/index.js";
-import { IndexDb, IndexStore, RefResolver, SearchEngine } from "./indexdb/index.js";
+import {
+  CallGraph,
+  IndexDb,
+  IndexStore,
+  PageRank,
+  RefResolver,
+  SearchEngine,
+} from "./indexdb/index.js";
+import type { RankOptions, RankStats } from "./indexdb/index.js";
 import type { ParseCacheStats } from "@codingverse/shared";
 import { DEFAULT_TOKEN_BUDGET, STATE_DIR } from "@codingverse/shared";
 
@@ -222,7 +230,11 @@ export class Engine {
     await cache.save();
     this.lastCacheStats = stats;
 
-    const result = await compress(parsed, sources, opts, this.repoPath);
+    // v2: pagerank-aware importance when the index is already open; else
+    // undefined → compress falls back to v1 heuristics (lazy-IndexDb safe).
+    const importanceProvider = this.pagerankImportanceProvider();
+
+    const result = await compress(parsed, sources, opts, this.repoPath, importanceProvider);
     this.lastExpandMap = result.expandMap;
 
     // Persist the expand map so a separate `cv expand <id>` process can
@@ -325,18 +337,53 @@ export class Engine {
   }
 
   /** Call-hierarchy: who calls this node. */
-  async callers(_nodeId: string, _depth = 1): Promise<SymbolNode[]> {
-    throw new Error("Engine.callers not implemented (v2)");
+  async callers(nodeId: string, depth = 1): Promise<SymbolNode[]> {
+    const db = this.ensureIndexDb();
+    return new CallGraph(db).callers(nodeId, depth).nodes;
   }
 
   /** Call-hierarchy: what this node calls. */
-  async callees(_nodeId: string, _depth = 1): Promise<SymbolNode[]> {
-    throw new Error("Engine.callees not implemented (v2)");
+  async callees(nodeId: string, depth = 1): Promise<SymbolNode[]> {
+    const db = this.ensureIndexDb();
+    return new CallGraph(db).callees(nodeId, depth).nodes;
   }
 
   /** Impact radius: reverse BFS with container drill-down. */
-  async impact(_nodeId: string, _depth = 3): Promise<SymbolNode[]> {
-    throw new Error("Engine.impact not implemented (v2)");
+  async impact(nodeId: string, depth = 3): Promise<SymbolNode[]> {
+    const db = this.ensureIndexDb();
+    return new CallGraph(db).impact(nodeId, depth).nodes;
+  }
+
+  /**
+   * v2: Personalized PageRank power iteration over the call graph, written
+   * back to nodes.pagerank. Run after index() so nodes/edges are populated;
+   * pack()/search() then read nodes.pagerank (with a v1 fallback when
+   * unranked). Returns convergence stats.
+   */
+  async rank(opts?: RankOptions): Promise<RankStats> {
+    const db = this.ensureIndexDb();
+    return new PageRank(db).rank(opts);
+  }
+
+  /**
+   * Build a file-importance provider that reads persisted pagerank from the
+   * SQLite index, for compress()'s layer selection. Returns undefined when
+   * the index was never opened in this process, so a standalone `cv pack`
+   * falls back to v1 heuristics and never creates index.db (lazy-IndexDb
+   * invariant). When the index IS open, the provider returns the file's
+   * average pagerank (0 if unranked → compress falls back to v1 per-file).
+   */
+  private pagerankImportanceProvider(): ((path: string) => number) | undefined {
+    const db = this.indexDb;
+    if (!db) return undefined;
+    const stmt = db.db.prepare(
+      "SELECT AVG(pagerank) AS avg FROM nodes WHERE file_path = ?",
+    );
+    return (filePath: string): number => {
+      const row = stmt.get(filePath) as { avg: number | null } | undefined;
+      const avg = row?.avg ?? 0;
+      return avg > 0 ? avg : 0;
+    };
   }
 
   /** Dashboard data source: all observation state in one call. */

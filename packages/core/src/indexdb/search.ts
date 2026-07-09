@@ -104,7 +104,7 @@ export class SearchEngine {
       `SELECT id, start_line, end_line, body FROM chunks WHERE file_path = ?`,
     );
     this.relatedNodes = d.prepare(
-      `SELECT id FROM nodes WHERE file_path = ? ORDER BY start_line LIMIT 5`,
+      `SELECT id FROM nodes WHERE file_path = ? ORDER BY pagerank DESC, start_line ASC LIMIT 5`,
     );
   }
 

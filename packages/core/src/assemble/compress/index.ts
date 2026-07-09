@@ -78,6 +78,7 @@ export const compress = async (
   sources: Map<string, string>,
   opts: PackOptions,
   repoRoot: string,
+  importanceProvider?: (path: string) => number,
 ): Promise<CompressResult> => {
   const budget = opts.tokenBudget ?? DEFAULT_TOKEN_BUDGET;
   const strategy = opts.layerStrategy ?? "auto";
@@ -107,8 +108,17 @@ export const compress = async (
 
     // Importance: code files (with symbols) rank above data/doc; larger code
     // files rank slightly higher (more likely meaningful). Pinned = +∞.
+    // v2: when an importanceProvider is supplied (Engine.pack with an open
+    // index) and returns a positive avg pagerank for the file, scale by
+    // pagerank (1000 base so code > data, + pagerank contribution). When the
+    // provider is absent or returns 0 (unranked / no index), fall back to
+    // the v1 heuristic — identical to pre-v2 behavior.
     const pinned = isPinned(p.path);
-    const importance = (r.hasSymbols ? 1000 : 0) + p.symbols.length;
+    const importance = (() => {
+      const pr = importanceProvider?.(p.path) ?? 0;
+      if (pr > 0) return 1000 + pr * 10000;
+      return (r.hasSymbols ? 1000 : 0) + p.symbols.length;
+    })();
 
     candidates.push({ path: p.path, cost, importance, pinned });
   }
