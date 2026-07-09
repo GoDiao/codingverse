@@ -28,7 +28,7 @@ import {
   RefResolver,
   SearchEngine,
 } from "./indexdb/index.js";
-import type { RankOptions, RankStats } from "./indexdb/index.js";
+import type { RankOptions, RankStats, GraphResult } from "./indexdb/index.js";
 import type { ParseCacheStats } from "@codingverse/shared";
 import { DEFAULT_TOKEN_BUDGET, STATE_DIR } from "@codingverse/shared";
 
@@ -355,6 +355,17 @@ export class Engine {
   }
 
   /**
+   * v2-fix: full impact result (nodes + edges + byDepth + truncated) for
+   * CLI/MCP to surface the container-cap cut. `impact()` keeps the simple
+   * SymbolNode[] contract from design.md; this is the richer variant V2-4
+   * CLI's `cv impact` and V2-6 MCP call when they need to report truncation.
+   */
+  async impactGraph(nodeId: string, depth = 3): Promise<GraphResult> {
+    const db = this.ensureIndexDb();
+    return new CallGraph(db).impact(nodeId, depth);
+  }
+
+  /**
    * v2: Personalized PageRank power iteration over the call graph, written
    * back to nodes.pagerank. Run after index() so nodes/edges are populated;
    * pack()/search() then read nodes.pagerank (with a v1 fallback when
@@ -374,9 +385,8 @@ export class Engine {
    * average pagerank (0 if unranked → compress falls back to v1 per-file).
    */
   private pagerankImportanceProvider(): ((path: string) => number) | undefined {
-    const db = this.indexDb;
-    if (!db) return undefined;
-    const stmt = db.db.prepare(
+    if (this.closed || !this.indexDb) return undefined;
+    const stmt = this.indexDb.db.prepare(
       "SELECT AVG(pagerank) AS avg FROM nodes WHERE file_path = ?",
     );
     return (filePath: string): number => {

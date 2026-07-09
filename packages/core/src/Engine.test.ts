@@ -195,6 +195,19 @@ describe("Engine.pack — regression guard (unaffected by index wiring)", () => 
     await engine.close();
   });
 
+  it("pack() after index()+close() falls back to v1 (no opaque sqlite throw)", async () => {
+    const engine = await Engine.open(dir);
+    await engine.index();
+    await engine.close();
+    // After close, this.indexDb is non-null but the connection is closed and
+    // this.closed=true → pagerankImportanceProvider returns undefined → v1
+    // heuristic. pack() must not throw "database is not open".
+    const result = await engine.pack();
+    expect(typeof result.content).toBe("string");
+    expect(result.content.length).toBeGreaterThan(0);
+    expect(result.fileCount).toBeGreaterThan(0);
+  });
+
   it("close() after pack() does not throw", async () => {
     const engine = await Engine.open(dir);
     await engine.pack();
@@ -261,6 +274,22 @@ describe("Engine.callers/callees/impact — CallGraph wiring (v2)", () => {
     const nodes = await engine.impact(cId, 3);
     expect(nodes.length).toBeGreaterThan(0);
     expect(nodes[0]!.id).toBe(cId);
+    await engine.close();
+  });
+
+  it("impactGraph(cId, 3) returns a GraphResult with nodes/edges/byDepth/truncated", async () => {
+    await fsp.writeFile(path.join(dir, "chain.ts"), CHAIN);
+    const engine = await Engine.open(dir);
+    await engine.index();
+    const cId = symbolId("chain.ts", "c");
+    const res = await engine.impactGraph(cId, 3);
+    expect(Array.isArray(res.nodes)).toBe(true);
+    expect(res.nodes.length).toBeGreaterThan(0);
+    expect(Array.isArray(res.edges)).toBe(true);
+    expect(Array.isArray(res.byDepth)).toBe(true);
+    expect(res.byDepth[0]).toHaveLength(1);
+    expect(res.byDepth[0]![0]!.id).toBe(cId);
+    expect(typeof res.truncated).toBe("boolean");
     await engine.close();
   });
 
