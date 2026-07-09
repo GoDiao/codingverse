@@ -5,4 +5,5 @@ export { IndexDb, type DbOptions } from "./db.js";
 export { IndexStore, type StoreInput, type StoreStats } from "./store.js";
 export { RefResolver, type ResolveStats } from "./resolve.js";
 export { SearchEngine, type SearchParams, type SearchRow } from "./search.js";
+export { CallGraph, type GraphResult } from "./graph.js";
 export { symbolId, chunkId, qualifiedName } from "./ids.js";
