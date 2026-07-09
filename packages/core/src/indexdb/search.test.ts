@@ -98,6 +98,46 @@ describe("SearchEngine — BM25 basic (CamelCase split)", () => {
   });
 });
 
+describe("SearchEngine — trigram substring (CamelCase identifier, no separate words)", () => {
+  // v1.1 acceptance criterion #2: a chunk whose body is only the CamelCase
+  // identifier (no comment providing separate words) must be findable. The
+  // trigram tokenizer indexes 3-char subsequences of `TokenBudget`, so the
+  // body matches the substring queries "TokenBudget" / "tokenbudget" / "Token".
+  const src = `export class TokenBudget {
+  tokens: number;
+  budget: number;
+}
+`;
+
+  it("search('TokenBudget') finds the class chunk with no comment", async () => {
+    const { db, parsed, engine } = await seed([{ path: "tb.ts", content: src }]);
+    const chunk = parsed[0]!.chunks[0]!;
+    expect(chunk).toBeDefined();
+    const res = engine.search({ query: "TokenBudget" });
+    expect(res.length).toBeGreaterThan(0);
+    expect(res.find((r) => r.chunkId === chunk.id)).toBeDefined();
+    db.close();
+  });
+
+  it("search('tokenbudget') (lowercase) finds the class chunk", async () => {
+    const { db, parsed, engine } = await seed([{ path: "tb.ts", content: src }]);
+    const chunk = parsed[0]!.chunks[0]!;
+    const res = engine.search({ query: "tokenbudget" });
+    expect(res.length).toBeGreaterThan(0);
+    expect(res.find((r) => r.chunkId === chunk.id)).toBeDefined();
+    db.close();
+  });
+
+  it("search('Token') finds the class chunk via substring", async () => {
+    const { db, parsed, engine } = await seed([{ path: "tb.ts", content: src }]);
+    const chunk = parsed[0]!.chunks[0]!;
+    const res = engine.search({ query: "Token" });
+    expect(res.length).toBeGreaterThan(0);
+    expect(res.find((r) => r.chunkId === chunk.id)).toBeDefined();
+    db.close();
+  });
+});
+
 describe("SearchEngine — empty / short query", () => {
   it("returns [] for empty string", async () => {
     const { db, engine } = await seed([

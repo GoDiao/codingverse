@@ -63,16 +63,24 @@ CREATE TABLE IF NOT EXISTS unresolved_refs (
   file_path      TEXT, language TEXT
 );
 
--- FTS5: symbol names
+-- FTS5: symbol names.
+-- trigram tokenizer (v1.1): indexes 3-char subsequences so CamelCase symbol
+-- names like "TokenBudget" are findable via substring (token/budget/TokenBudget).
+-- A schema_version bump in IndexDb.migrate() drops+recreates these tables on
+-- pre-existing indexes built with the old unicode61 tokenizer (see db.ts).
 CREATE VIRTUAL TABLE IF NOT EXISTS nodes_fts USING fts5(
   id UNINDEXED, name, qualified_name, docstring, signature,
-  content='nodes', content_rowid='rowid'
+  content='nodes', content_rowid='rowid', tokenize = "trigram"
 );
 
--- FTS5: chunk body (BM25) + binarized vector tokens (pseudo-vector)
+-- FTS5: chunk body (BM25) + binarized vector tokens (pseudo-vector).
+-- trigram tokenizer (v1.1): body substrings of length >=3 are indexed, so a
+-- chunk containing `export class TokenBudget` matches "token"/"budget"/"TokenBudget"
+-- even with no comment providing separate words. Requires rebuild of pre-v1.1
+-- indexes (handled by IndexDb.migrate() via schema_version gating).
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
   id UNINDEXED, body, embedding_tokens,
-  content='chunks', content_rowid='rowid'
+  content='chunks', content_rowid='rowid', tokenize = "trigram"
 );
 
 -- FTS5 sync triggers (external-content tables do not auto-populate;

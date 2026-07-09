@@ -138,6 +138,77 @@ describe("IndexDb FTS5 (external-content + triggers)", () => {
   });
 });
 
+describe("IndexDb migrate (schema_version upgrade)", () => {
+  it("stamps meta.schema_version on a fresh migrate()", () => {
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    db.prepareStatements();
+    const row = db.statements.get("getMeta")!.get("schema_version") as
+      | { value: string }
+      | undefined;
+    expect(row?.value).toBe("v1.1-trigram");
+    db.close();
+  });
+
+  it("is idempotent: a second migrate() with a matching version does not drop FTS", () => {
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    const ftsCount = (
+      db.db
+        .prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name='chunks_fts'")
+        .get() as { n: number }
+    ).n;
+    expect(ftsCount).toBe(1);
+    // Second migrate() — schema_version matches, so upgradeFtsIfStale is a no-op.
+    db.migrate();
+    expect(
+      (
+        db.db
+          .prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name='chunks_fts'")
+          .get() as { n: number }
+      ).n,
+    ).toBe(1);
+    db.close();
+  });
+
+  it("upgrades a stale (unicode61) index to trigram and keeps data searchable via rebuild", () => {
+    const db = new IndexDb({ dbPath: ":memory:" });
+    // Build a pre-v1.1 index by hand: base table + unicode61 FTS + trigger + data.
+    db.db.exec(
+      `CREATE TABLE chunks (id TEXT PRIMARY KEY, file_path TEXT, body TEXT, embedding_tokens TEXT);
+       CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+       CREATE VIRTUAL TABLE chunks_fts USING fts5(id UNINDEXED, body, embedding_tokens, content='chunks', content_rowid='rowid');
+       CREATE TRIGGER chunks_fts_ai AFTER INSERT ON chunks BEGIN
+         INSERT INTO chunks_fts(rowid, id, body, embedding_tokens) VALUES (new.rowid, new.id, new.body, new.embedding_tokens);
+       END;`,
+    );
+    db.db
+      .prepare("INSERT INTO chunks (id, file_path, body) VALUES (?, ?, ?)")
+      .run("c1", "src/a.ts", "export class TokenBudget { tokens: number; }");
+    db.db
+      .prepare("INSERT INTO meta (key, value) VALUES (?, ?)")
+      .run("schema_version", "v1.0-unicode61");
+    // Under unicode61 the body CamelCase is one token; 'token' substring does not match.
+    expect(
+      db.db.prepare("SELECT id FROM chunks_fts WHERE chunks_fts MATCH ?").get("token"),
+    ).toBeUndefined();
+
+    // migrate() detects the stale version, drops+recreates FTS with trigram, rebuilds.
+    db.migrate();
+
+    // The rebuilt trigram index now matches the 'token' substring for the existing row.
+    const hit = db.db
+      .prepare("SELECT id FROM chunks_fts WHERE chunks_fts MATCH ?")
+      .get("token") as { id: string } | undefined;
+    expect(hit?.id).toBe("c1");
+    const version = db.db
+      .prepare("SELECT value FROM meta WHERE key = ?")
+      .get("schema_version") as { value: string } | undefined;
+    expect(version?.value).toBe("v1.1-trigram");
+    db.close();
+  });
+});
+
 describe("IndexDb prepareStatements", () => {
   it("prepares countFiles / getMeta / setMeta and they work", () => {
     const db = new IndexDb({ dbPath: ":memory:" });
