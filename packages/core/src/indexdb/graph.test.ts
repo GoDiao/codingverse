@@ -127,11 +127,97 @@ function caller2() { const x = new X(); return x.n(); }
     expect(nodeIds).toContain(xmId);
     expect(nodeIds).toContain(xnId);
     expect(nodeIds).toContain(caller2Id);
+    // Same-depth invariant: the drill-down adds the sibling's caller at
+    // the SAME depth it discovered the sibling (not depth+1). caller2 is
+    // reached via X::n's drill-down at depth 1, so it must sit in
+    // byDepth[1]. A regression that pushed it to byDepth[2] would still
+    // pass the `toContain` above but break this pin.
+    expect(ids(res.byDepth[1]!)).toContain(caller2Id);
     // Plain callers(helper, 2) would NOT reach caller2 — the drill-down is
     // what surfaces it. Assert the distinction explicitly.
     const plain = g.callers(helperId, 2);
     expect(ids(plain.nodes)).not.toContain(caller2Id);
     db.close();
+  });
+
+  it("impact(<container-method>, 2) surfaces siblings' callers at depth 1 via the start-node pre-step", async () => {
+    // X::m has NO direct callers, so without the start-node pre-step the
+    // BFS would stall at depth 0 and never reach X::n or userOfN. The
+    // pre-step seeds X::m's siblings (X::n) into layer 1's reverse step,
+    // so userOfN (who calls X::n) surfaces at depth 1.
+    const src = `class X {
+  m() {}
+  n() { userOfN(); }
+}
+function userOfN() { const x = new X(); return x.n(); }
+`;
+    const db = await seed([{ path: "prestep.ts", content: src }]);
+    const xmId = symbolId("prestep.ts", "X::m");
+    const xnId = symbolId("prestep.ts", "X::n");
+    const userOfNId = symbolId("prestep.ts", "userOfN");
+    const g = new CallGraph(db);
+
+    const res = g.impact(xmId, 2);
+
+    const nodeIds = ids(res.nodes);
+    expect(nodeIds).toContain(xmId);
+    expect(nodeIds).toContain(xnId);
+    expect(nodeIds).toContain(userOfNId);
+    // Same-depth pin: X::n and userOfN both surface at depth 1 (the
+    // pre-step + its reverse step), not depth 2.
+    expect(ids(res.byDepth[1]!)).toContain(xnId);
+    expect(ids(res.byDepth[1]!)).toContain(userOfNId);
+    // Sanity: X::m genuinely has no direct callers, so a plain callers
+    // traversal returns only X::m — proving this test exercises the
+    // pre-step, not ordinary reverse BFS.
+    const plain = g.callers(xmId, 2);
+    expect(ids(plain.nodes)).toEqual([xmId]);
+    db.close();
+  });
+});
+
+describe("CallGraph impact — cap truncation flag", () => {
+  it("sets truncated=true when a drill-down layer exceeds CONTAINER_DRILL_DOWN_CAP", async () => {
+    // Build a class with 60 methods, each called by a distinct top-level
+    // caller, plus one shared target helper called by method0. impact(helper)
+    // reverse-steps to method0 (depth 1), drills into method0's container X
+    // (60 siblings), and tries to pull each sibling's caller — well past the
+    // 50-node cap, so `truncated` must be true.
+    const methods: string[] = [];
+    const callers: string[] = [];
+    for (let i = 0; i < 60; i++) {
+      methods.push(`  m${i}() { c${i}(); }`);
+      callers.push(`function c${i}() { return ${i}; }`);
+    }
+    methods[0] = `  m0() { helper(); c0(); }`;
+    const src = `class X {
+${methods.join("\n")}
+}
+function helper() { return 1; }
+${callers.join("\n")}
+`;
+    const db = await seed([{ path: "big.ts", content: src }]);
+    const helperId = symbolId("big.ts", "helper");
+    const g = new CallGraph(db);
+
+    const res = g.impact(helperId, 2);
+
+    expect(res.truncated).toBe(true);
+    // Small-fixture control: the same call on the small impact fixture
+    // (a few nodes, no cap hit) must NOT set truncated.
+    const smallSrc = `class X {
+  m() { helper(); }
+  n() { other(); }
+}
+function helper() { return 1; }
+function other() { return 2; }
+function caller2() { const x = new X(); return x.n(); }
+`;
+    const smallDb = await seed([{ path: "small.ts", content: smallSrc }]);
+    const smallRes = new CallGraph(smallDb).impact(symbolId("small.ts", "helper"), 2);
+    expect(smallRes.truncated).toBeFalsy();
+    db.close();
+    smallDb.close();
   });
 });
 

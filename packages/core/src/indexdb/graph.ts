@@ -37,7 +37,10 @@ import type { SymbolNode } from "@codingverse/shared";
  *
  * The expansion is capped (CONTAINER_DRILL_DOWN_CAP = 50 nodes per layer)
  * to avoid blow-up on huge classes; when a layer would exceed the cap the
- * excess ids are dropped. The cap is checked on every addition.
+ * excess ids AND their edges are dropped (cap-triggering edges are NOT
+ * recorded, so GraphResult.edges never references a node id absent from
+ * GraphResult.nodes) and `GraphResult.truncated` is set so callers can
+ * surface the cut to users. The cap is checked on every addition.
  *
  * node:sqlite IN-list: StatementSync does not accept a variable-length
  * `IN (?, ?, ?)` placeholder list, so the edges-by-frontier and
@@ -54,6 +57,13 @@ export interface GraphResult {
   edges: { source: string; target: string; kind: string; line: number | null }[];
   /** nodes per depth level, for visualization. byDepth[0] = [start node]. */
   byDepth: SymbolNode[][];
+  /**
+   * Set to true when a container drill-down layer hit
+   * CONTAINER_DRILL_DOWN_CAP and dropped the excess ids/edges. V2-4 CLI /
+   * V2-6 MCP surface this so users know the impact set was cut, not
+   * complete. Undefined/false when no cap fired.
+   */
+  truncated?: boolean;
 }
 
 interface NodeRow {
@@ -135,11 +145,16 @@ export class CallGraph {
     const byDepth: SymbolNode[][] = [[startNode]];
     const edges: EdgeRow[] = [];
     let frontier: string[] = [nodeId];
+    let truncated = false;
 
     const startSiblings = drillDown ? this.siblingIds(startRow) : [];
-    for (const s of startSiblings) visited.add(s);
 
     for (let d = 1; d <= depth; d++) {
+      // d===1: if the start node is a container method, seed the reverse
+      // step with its siblings so their callers surface at depth 1. The
+      // siblings themselves are also emitted as depth-1 nodes (added to
+      // nextIds below); they are NOT pre-marked visited, so the normal
+      // newIds→nodes→byDepth path carries them through.
       const layerSeeds = drillDown && d === 1 ? [nodeId, ...startSiblings] : frontier;
       if (layerSeeds.length === 0) break;
 
@@ -160,8 +175,9 @@ export class CallGraph {
       }
 
       if (drillDown) {
-        const drillDownEdges = this.expandWithContainerDrillDown(nextIds, visited);
-        edges.push(...drillDownEdges);
+        const drill = this.expandWithContainerDrillDown(nextIds, visited);
+        edges.push(...drill.edges);
+        if (drill.truncated) truncated = true;
       }
 
       const newIds = [...nextIds].filter((id) => !visited.has(id));
@@ -174,43 +190,63 @@ export class CallGraph {
       frontier = newIds;
     }
 
-    return { nodes, edges: dedupEdges(edges), byDepth };
+    return { nodes, edges: dedupEdges(edges), byDepth, truncated };
   }
 
   /**
    * Container drill-down: for each id in `layerIds` that is a method in a
    * container, add its sibling methods and those siblings' direct callers
    * to `layerIds` (mutated), all at the same BFS depth. Returns the extra
-   * edges traversed (sibling → its caller). Bounded by
-   * CONTAINER_DRILL_DOWN_CAP: once `layerIds` reaches the cap, further
-   * additions are dropped. Only the ids present at entry are drilled into
-   * (no chaining through drill-down-added callers), which keeps the
-   * expansion a single pass and naturally bounded.
+   * edges traversed (sibling → its caller) and a `truncated` flag set when
+   * CONTAINER_DRILL_DOWN_CAP was hit. Bounded by the cap: once `layerIds`
+   * reaches the cap, further additions are dropped AND their edges are NOT
+   * recorded (the cap-triggering edge's source would not be in `layerIds`,
+   * so emitting it would dangle a node id absent from the result nodes).
+   * Only the ids present at entry are drilled into (no chaining through
+   * drill-down-added callers), which keeps the expansion a single pass and
+   * naturally bounded.
    */
   private expandWithContainerDrillDown(
     layerIds: Set<string>,
     visited: Set<string>,
-  ): EdgeRow[] {
+  ): { edges: EdgeRow[]; truncated: boolean } {
     const extraEdges: EdgeRow[] = [];
+    let truncated = false;
     const initialIds = [...layerIds];
     for (const id of initialIds) {
-      if (layerIds.size >= CONTAINER_DRILL_DOWN_CAP) break;
+      if (layerIds.size >= CONTAINER_DRILL_DOWN_CAP) {
+        truncated = true;
+        break;
+      }
       const row = this.nodeById.get(id) as NodeRow | undefined;
       if (!row || !row.qualified_name || !row.qualified_name.includes("::")) continue;
       for (const sibId of this.siblingIds(row)) {
         if (visited.has(sibId) || layerIds.has(sibId)) continue;
-        if (layerIds.size >= CONTAINER_DRILL_DOWN_CAP) break;
+        if (layerIds.size >= CONTAINER_DRILL_DOWN_CAP) {
+          truncated = true;
+          break;
+        }
         layerIds.add(sibId);
         for (const e of this.edgesFromTargets([sibId])) {
-          extraEdges.push(e);
           if (!visited.has(e.source) && !layerIds.has(e.source)) {
-            if (layerIds.size >= CONTAINER_DRILL_DOWN_CAP) break;
+            if (layerIds.size >= CONTAINER_DRILL_DOWN_CAP) {
+              truncated = true;
+              break;
+            }
+            // Record the edge only when its caller id is admitted into the
+            // layer — otherwise GraphResult.edges would reference a source
+            // absent from GraphResult.nodes (dangling edge).
             layerIds.add(e.source);
+            extraEdges.push(e);
+          } else {
+            // Caller already present/visited: edge still traversed, no
+            // dangle risk since the source will already be in nodes.
+            extraEdges.push(e);
           }
         }
       }
     }
-    return extraEdges;
+    return { edges: extraEdges, truncated };
   }
 
   /** Sibling method ids of `row` in its container, or [] if `row` is not in a container. */
@@ -251,7 +287,8 @@ export class CallGraph {
       `SELECT id, kind, name, qualified_name, file_path, language,
               start_line, end_line, start_byte, end_byte,
               signature, docstring, visibility, pagerank
-       FROM nodes WHERE id IN (${placeholders})`,
+       FROM nodes WHERE id IN (${placeholders})
+       ORDER BY start_line ASC, id ASC`,
     );
     return (stmt.all(...ids) as unknown as NodeRow[]).map(rowToSymbolNode);
   }
