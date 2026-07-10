@@ -82,8 +82,6 @@ const require = createRequire(import.meta.url);
 export interface ScipImportOptions {
   /** Path to the .scip file to import. */
   scipPath: string;
-  /** Repo root — kept for parity with the API contract / future path resolution. */
-  repoRoot: string;
 }
 
 export interface ScipImportStats {
@@ -171,14 +169,29 @@ function resolveScipProtoPath(): string {
  * Extract the last descriptor's bare name from a SCIP symbol string. Strips
  * package metadata (first 4 space tokens), backtick-quoted path components, and
  * surrounding quotes. Returns "" when no descriptor name can be recovered.
+ *
+ * SCIP method descriptors can render as `name(disambiguator)suffix` (e.g.
+ * `MyClass#myMethod(overload1)()`), where `(overload1)` is a disambiguator
+ * inserted by the indexer to distinguish overloads. The disambiguator is
+ * stripped so node name matching sees `myMethod`, not
+ * `myMethod(overload1)()` — otherwise overloaded methods would never match.
  */
-function parseScipSymbolName(symbol: string): string {
+export function parseScipSymbolName(symbol: string): string {
   const descriptor = symbol.split(" ").slice(4).join(" ");
   if (!descriptor) return "";
   const stripped = descriptor.replace(/`[^`]*`/g, "");
   const lastParen = stripped.lastIndexOf("(");
   if (lastParen !== -1) {
-    return lastSegmentName(stripped.slice(0, lastParen));
+    const name = lastSegmentName(stripped.slice(0, lastParen));
+    // Strip a trailing `(disambiguator)` from the last segment name: if the
+    // segment contains a `(` (the disambiguator opening, before the method
+    // suffix `(` that was already consumed by lastParen), cut at the first
+    // `(` so only the bare name remains.
+    const disambIdx = name.indexOf("(");
+    if (disambIdx !== -1) {
+      return name.slice(0, disambIdx).replace(/^["']+|["']+$/g, "");
+    }
+    return name;
   }
   if (stripped.endsWith("[]")) {
     return lastSegmentName(stripped.slice(0, -2));
@@ -448,6 +461,10 @@ export class ScipImporter {
 
 /** Innermost definition occurrence whose 0-based line range contains `line`. */
 function innermostContaining(defs: DefOcc[], line: number): DefOcc | null {
+  // Tie-break: when two defs have equal span, the first in `defs` wins because
+  // the comparison is strict `<` (not `<=`). `defs` is built in document order
+  // (SCIP occurrences are emitted in source order), so the result is
+  // deterministic across runs.
   let best: DefOcc | null = null;
   for (const def of defs) {
     if (def.startLine <= line && line <= def.endLine) {

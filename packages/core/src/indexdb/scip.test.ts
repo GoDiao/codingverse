@@ -5,7 +5,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import type { Root } from "protobufjs";
 import { IndexDb } from "./db.js";
-import { ScipImporter } from "./scip.js";
+import { ScipImporter, parseScipSymbolName } from "./scip.js";
 import { symbolId } from "./ids.js";
 
 const require = createRequire(import.meta.url);
@@ -206,7 +206,7 @@ describe("ScipImporter — basic edge import (name match, single file)", () => {
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
 
     expect(stats.documents).toBe(1);
     expect(stats.occurrences).toBe(1);
@@ -255,7 +255,7 @@ describe("ScipImporter — qualified-name match (class::method)", () => {
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
     expect(stats.edgesInserted).toBe(1);
 
     const rows = allEdges(db);
@@ -291,7 +291,7 @@ describe("ScipImporter — heuristic edge replacement", () => {
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
 
     expect(stats.edgesReplaced).toBe(1);
     expect(stats.edgesInserted).toBe(1);
@@ -333,7 +333,7 @@ describe("ScipImporter — dedup", () => {
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
     expect(stats.relationships).toBe(2);
     expect(stats.edgesInserted).toBe(1);
     expect(edgeCount(db)).toBe(1);
@@ -364,7 +364,7 @@ describe("ScipImporter — unmatched target skipped", () => {
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
     expect(stats.relationships).toBe(1);
     expect(stats.edgesInserted).toBe(0);
     expect(edgeCount(db)).toBe(0);
@@ -390,7 +390,7 @@ describe("ScipImporter — source not in index skipped", () => {
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
     expect(stats.relationships).toBe(1);
     expect(stats.edgesInserted).toBe(0);
     expect(edgeCount(db)).toBe(0);
@@ -420,7 +420,7 @@ describe("ScipImporter — non-reference relationship skipped", () => {
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
     expect(stats.relationships).toBe(1);
     expect(stats.edgesInserted).toBe(0);
     expect(edgeCount(db)).toBe(0);
@@ -451,7 +451,7 @@ describe("ScipImporter — occurrence path (scip-typescript style)", () => {
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
     expect(stats.occurrences).toBe(2);
     expect(stats.edgesInserted).toBe(1);
 
@@ -498,7 +498,7 @@ describe("ScipImporter — occurrence path (scip-typescript style)", () => {
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
     expect(stats.edgesInserted).toBe(1);
     const rows = allEdges(db);
     expect(rows[0]!.source).toBe(innerId);
@@ -535,7 +535,7 @@ describe("ScipImporter — occurrence path (scip-typescript style)", () => {
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
     expect(stats.occurrences).toBe(2);
     expect(stats.edgesInserted).toBe(1);
     const rows = allEdges(db);
@@ -571,7 +571,7 @@ describe("ScipImporter — occurrence path (scip-typescript style)", () => {
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
     expect(stats.edgesInserted).toBe(1);
     const rows = allEdges(db);
     expect(rows[0]!.source).toBe(outerId);
@@ -614,7 +614,7 @@ describe("ScipImporter — occurrence path (scip-typescript style)", () => {
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
     expect(stats.occurrences).toBe(3);
     expect(stats.edgesInserted).toBe(1);
     const rows = allEdges(db);
@@ -639,7 +639,7 @@ describe("ScipImporter — occurrence path (scip-typescript style)", () => {
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
     expect(stats.occurrences).toBe(1);
     expect(stats.edgesInserted).toBe(0);
     expect(edgeCount(db)).toBe(0);
@@ -687,7 +687,7 @@ describe("ScipImporter — occurrence path (scip-typescript style)", () => {
     tmpFiles.push(tmpPath);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath: tmpPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath: tmpPath });
     expect(stats.edgesInserted).toBe(1);
     const rows = allEdges(db);
     expect(rows[0]!.source).toBe(fooId);
@@ -717,7 +717,7 @@ describe("ScipImporter — keeps heuristic edges when SCIP yields none for a fil
     ]);
 
     const importer = new ScipImporter(db);
-    const stats = await importer.import({ scipPath, repoRoot: "/tmp" });
+    const stats = await importer.import({ scipPath });
     expect(stats.edgesInserted).toBe(0);
     expect(stats.edgesReplaced).toBe(0);
     // Heuristic edge survives because SCIP contributed no edges for this file.
@@ -735,7 +735,7 @@ describe("ScipImporter — empty index guard", () => {
     ]);
     const importer = new ScipImporter(db);
     await expect(
-      importer.import({ scipPath, repoRoot: "/tmp" }),
+      importer.import({ scipPath }),
     ).rejects.toThrow(/cv index/);
     db.close();
   });
@@ -748,7 +748,7 @@ describe("ScipImporter — missing .scip file", () => {
     const importer = new ScipImporter(db);
     const bogus = path.join(tmpDir, "does-not-exist.scip");
     await expect(
-      importer.import({ scipPath: bogus, repoRoot: "/tmp" }),
+      importer.import({ scipPath: bogus }),
     ).rejects.toThrow(/SCIP file not found/);
     db.close();
   });
@@ -782,7 +782,7 @@ describe("ScipImporter — transaction safety", () => {
     );
 
     const importer = new ScipImporter(db);
-    await expect(importer.import({ scipPath, repoRoot: "/tmp" })).rejects.toThrow();
+    await expect(importer.import({ scipPath })).rejects.toThrow();
 
     // ROLLBACK must discard the in-progress delete + any pending scip insert,
     // restoring the pre-import heuristic edge as the only edge.
@@ -790,5 +790,30 @@ describe("ScipImporter — transaction safety", () => {
     const rows = allEdges(db);
     expect(rows[0]!.provenance).toBe("heuristic");
     db.close();
+  });
+});
+
+describe("parseScipSymbolName — disambiguator strip", () => {
+  it("strips a (disambiguator) from a method descriptor, returning the bare name", () => {
+    // scip-typescript renders overloaded methods as `name(disamb)()` — the
+    // disambiguator `(overload1)` sits between the bare name and the
+    // method-param `()`. Without stripping, the name would be
+    // `myMethod(overload1)()` and node matching would fail for overloads.
+    const symbol = "scip-typescript npm pkg 1.0.0 MyClass#myMethod(overload1)().";
+    expect(parseScipSymbolName(symbol)).toBe("myMethod");
+  });
+
+  it("returns the bare name for a non-disambiguated method (regression guard)", () => {
+    expect(parseScipSymbolName("scip-typescript npm test 1.0.0 foo().")).toBe("foo");
+    expect(parseScipSymbolName("scip-typescript npm test 1.0.0 Service# greet().")).toBe(
+      "greet",
+    );
+  });
+
+  it("strips a disambiguator on a method with real params", () => {
+    // `MyClass#myMethod(disamb)(realParams).` — the disambiguator is before
+    // the param list; the bare name `myMethod` must be recovered.
+    const symbol = "scip-typescript npm pkg 1.0.0 MyClass#myMethod(disamb)(x, y).";
+    expect(parseScipSymbolName(symbol)).toBe("myMethod");
   });
 });

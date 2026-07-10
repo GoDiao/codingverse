@@ -288,3 +288,113 @@ function helper() { return 1; }
     db.close();
   });
 });
+
+// ── Direct-insert helpers for qualified_name-specific fixtures ──────────────
+// Real TS parsing doesn't easily produce nested-class qualified names or
+// `_`-containing class names, so A1/A2 insert nodes + edges directly via SQL
+// (same pattern as scip.test.ts). The CallGraph reads from nodes/edges tables
+// regardless of how they were populated.
+
+function insertGraphNode(
+  db: IndexDb,
+  filePath: string,
+  qualifiedName: string,
+  startLine: number,
+): string {
+  const id = symbolId(filePath, qualifiedName);
+  const name = qualifiedName.split("::").pop() ?? qualifiedName;
+  db.db
+    .prepare(
+      `INSERT INTO nodes
+        (id, kind, name, qualified_name, file_path, language,
+         start_line, end_line, start_byte, end_byte,
+         signature, docstring, visibility, pagerank, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0, ?)`,
+    )
+    .run(
+      id,
+      qualifiedName.includes("::") ? "method" : "function",
+      name,
+      qualifiedName,
+      filePath,
+      "typescript",
+      startLine,
+      startLine,
+      0,
+      0,
+      Date.now(),
+    );
+  return id;
+}
+
+function insertGraphEdge(
+  db: IndexDb,
+  source: string,
+  target: string,
+  line = 1,
+): void {
+  db.db
+    .prepare(
+      `INSERT INTO edges (source, target, kind, line, col, provenance)
+       VALUES (?, ?, 'calls', ?, NULL, 'test')`,
+    )
+    .run(source, target, line);
+}
+
+describe("CallGraph impact — nested scope (lastIndexOf ::)", () => {
+  it("impact(Outer::Inner::m, 2) drills into Outer::Inner siblings, not Outer::Other", () => {
+    // graph.ts:219 uses lastIndexOf("::") to extract the scope from a
+    // qualified_name with multiple `::` separators. For `Outer::Inner::m`
+    // the scope is `Outer::Inner` (pattern `Outer::Inner::%`), NOT `Outer`
+    // (pattern `Outer::%`). The decoy `Outer::Other::p` would be a false
+    // sibling if indexOf("::") were used instead — assert it's absent.
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    const mId = insertGraphNode(db, "nest.ts", "Outer::Inner::m", 2);
+    const nId = insertGraphNode(db, "nest.ts", "Outer::Inner::n", 3);
+    const pId = insertGraphNode(db, "nest.ts", "Outer::Other::p", 5);
+    const callerNId = insertGraphNode(db, "nest.ts", "callerN", 7);
+    insertGraphEdge(db, callerNId, nId, 7);
+
+    const g = new CallGraph(db);
+    const res = g.impact(mId, 2);
+    const nodeIds = ids(res.nodes);
+
+    expect(nodeIds).toContain(mId);
+    expect(nodeIds).toContain(nId);
+    expect(nodeIds).toContain(callerNId);
+    // Decoy: `Outer::Other::p` shares the outer `Outer::` prefix but a
+    // different inner scope. With lastIndexOf it's NOT a sibling; with
+    // indexOf it would be. Asserting absence pins lastIndexOf.
+    expect(nodeIds).not.toContain(pId);
+    db.close();
+  });
+});
+
+describe("CallGraph impact — LIKE escape (escapeLike)", () => {
+  it("impact(My_Class::a, 2) finds My_Class::b sibling, not MyxClass::c", () => {
+    // graph.ts:291 escapeLike escapes `_` so it matches literally in the
+    // `LIKE ... ESCAPE '\'` siblings query. Without escaping, `_` is a
+    // wildcard matching any single char, so `MyxClass::c` would be a false
+    // sibling of `My_Class::a`.
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    const aId = insertGraphNode(db, "esc.ts", "My_Class::a", 2);
+    const bId = insertGraphNode(db, "esc.ts", "My_Class::b", 3);
+    const myxClassCId = insertGraphNode(db, "esc.ts", "MyxClass::c", 5);
+    const callerBId = insertGraphNode(db, "esc.ts", "callerB", 7);
+    insertGraphEdge(db, callerBId, bId, 7);
+
+    const g = new CallGraph(db);
+    const res = g.impact(aId, 2);
+    const nodeIds = ids(res.nodes);
+
+    expect(nodeIds).toContain(aId);
+    expect(nodeIds).toContain(bId);
+    expect(nodeIds).toContain(callerBId);
+    // Decoy: `MyxClass::c` would match `My_Class::%` if `_` were unescaped
+    // (x matches the wildcard `_`). With escaping it's excluded.
+    expect(nodeIds).not.toContain(myxClassCId);
+    db.close();
+  });
+});

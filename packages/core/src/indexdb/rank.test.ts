@@ -260,3 +260,170 @@ function c() { return 1; }
     db.close();
   });
 });
+
+// ── Direct-insert helpers for rank edge-case fixtures ───────────────────────
+// These tests construct specific graph shapes (self-loops, orphan edges,
+// multi-edges) that are easier to insert directly via SQL than to produce
+// via real TS parsing. PageRank reads from nodes/edges tables regardless.
+
+function insertRankNode(
+  db: IndexDb,
+  filePath: string,
+  name: string,
+  startLine: number,
+): string {
+  const id = symbolId(filePath, name);
+  db.db
+    .prepare(
+      `INSERT INTO nodes
+        (id, kind, name, qualified_name, file_path, language,
+         start_line, end_line, start_byte, end_byte,
+         signature, docstring, visibility, pagerank, updated_at)
+       VALUES (?, 'function', ?, ?, ?, 'typescript', ?, ?, 0, 0, NULL, NULL, NULL, 0, ?)`,
+    )
+    .run(id, name, name, filePath, startLine, startLine, Date.now());
+  return id;
+}
+
+function insertRankEdge(
+  db: IndexDb,
+  source: string,
+  target: string,
+  line = 1,
+): void {
+  db.db
+    .prepare(
+      `INSERT INTO edges (source, target, kind, line, col, provenance)
+       VALUES (?, ?, 'calls', ?, NULL, 'test')`,
+    )
+    .run(source, target, line);
+}
+
+describe("PageRank — multi-edge conservation", () => {
+  it("B's pagerank is ~equal whether A→B has 1 edge or 2 (multiplicity conservation)", () => {
+    // rank.ts:161 out-degree counts multiplicity: A→B twice → outDegree[A]=2,
+    // each edge weight = mul/2, B receives 2*(mul/2)*d*rank[A] = mul*d*rank[A]
+    // — same total as a single edge. This pins the conservation so a future
+    // refactor can't silently switch to dedupe.
+
+    // Scenario (a): one edge A→B.
+    const dbA = new IndexDb({ dbPath: ":memory:" });
+    dbA.migrate();
+    const aIdA = insertRankNode(dbA, "mul.ts", "a", 1);
+    const bIdA = insertRankNode(dbA, "mul.ts", "b", 2);
+    insertRankEdge(dbA, aIdA, bIdA, 1);
+    const prA = new PageRank(dbA);
+    prA.rank();
+    const rankBSingle = prA.get(bIdA);
+    dbA.close();
+
+    // Scenario (b): two edges A→B (same pair, different lines).
+    const dbB = new IndexDb({ dbPath: ":memory:" });
+    dbB.migrate();
+    const aIdB = insertRankNode(dbB, "mul.ts", "a", 1);
+    const bIdB = insertRankNode(dbB, "mul.ts", "b", 2);
+    insertRankEdge(dbB, aIdB, bIdB, 1);
+    insertRankEdge(dbB, aIdB, bIdB, 2);
+    const prB = new PageRank(dbB);
+    const statsB = prB.rank();
+    const rankBDouble = prB.get(bIdB);
+    dbB.close();
+
+    // edgeCount counts multiplicity (2 edges in scenario b).
+    expect(statsB.edgeCount).toBe(2);
+    // B's pagerank is conserved — same total regardless of multiplicity.
+    expect(rankBDouble).toBeCloseTo(rankBSingle, 5);
+  });
+});
+
+describe("PageRank — edge cases", () => {
+  it("N=1: single node, no edges → pagerank=1.0, converged=true", () => {
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    const aId = insertRankNode(db, "single.ts", "a", 1);
+    const pr = new PageRank(db);
+    const stats = pr.rank();
+
+    expect(stats.nodeCount).toBe(1);
+    expect(stats.edgeCount).toBe(0);
+    expect(stats.converged).toBe(true);
+    // 1/N = 1/1 = 1.0, and with no out-edges A is dangling so it receives
+    // the full dangling redistribution → stays at 1.0.
+    expect(pr.get(aId)).toBeCloseTo(1.0, 10);
+    db.close();
+  });
+
+  it("self-loop (A→A): rank() converges with a finite pagerank (no NaN/inf)", () => {
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    const aId = insertRankNode(db, "loop.ts", "a", 1);
+    insertRankEdge(db, aId, aId, 1);
+    const pr = new PageRank(db);
+    const stats = pr.rank();
+
+    expect(stats.nodeCount).toBe(1);
+    // Must not infinite-loop or produce NaN/Infinity.
+    expect(Number.isFinite(pr.get(aId))).toBe(true);
+    db.close();
+  });
+
+  it("disconnected components (A→B, C→D): converges, all nodes non-zero", () => {
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    const aId = insertRankNode(db, "disc.ts", "a", 1);
+    const bId = insertRankNode(db, "disc.ts", "b", 2);
+    const cId = insertRankNode(db, "disc.ts", "c", 4);
+    const dId = insertRankNode(db, "disc.ts", "d", 5);
+    insertRankEdge(db, aId, bId, 1);
+    insertRankEdge(db, cId, dId, 4);
+    const pr = new PageRank(db);
+    const stats = pr.rank();
+
+    expect(stats.converged).toBe(true);
+    expect(stats.nodeCount).toBe(4);
+    expect(pr.get(aId)).toBeGreaterThan(0);
+    expect(pr.get(bId)).toBeGreaterThan(0);
+    expect(pr.get(cId)).toBeGreaterThan(0);
+    expect(pr.get(dId)).toBeGreaterThan(0);
+    db.close();
+  });
+
+  it("orphan edge: skips edges whose source/target is not in nodes, reports filtered edgeCount", () => {
+    // rank.ts:160 `if (!indexById.has(src) || !indexById.has(tgt)) continue`
+    // filters edges referencing non-existent nodes. With FK ON such edges
+    // can't normally exist, but we insert one via PRAGMA foreign_keys=OFF to
+    // verify the defensive filter.
+    const db = new IndexDb({ dbPath: ":memory:" });
+    db.migrate();
+    const aId = insertRankNode(db, "orphan.ts", "a", 1);
+    const bId = insertRankNode(db, "orphan.ts", "b", 2);
+    insertRankEdge(db, aId, bId, 1);
+
+    // Insert an orphan edge: disable FK, insert, re-enable. The edge
+    // references node ids that don't exist in the nodes table.
+    db.db.exec("PRAGMA foreign_keys=OFF");
+    db.db
+      .prepare(
+        `INSERT INTO edges (source, target, kind, line, col, provenance)
+         VALUES (?, ?, 'calls', 1, NULL, 'test')`,
+      )
+      .run("nonexistent_src_12345", "nonexistent_tgt_67890");
+    db.db.exec("PRAGMA foreign_keys=ON");
+
+    const rawCount = (
+      db.db.prepare("SELECT COUNT(*) AS n FROM edges WHERE kind = 'calls'").get() as
+        { n: number }
+    ).n;
+    expect(rawCount).toBe(2);
+
+    const pr = new PageRank(db);
+    const stats = pr.rank();
+    // edgeCount is the FILTERED count (only the valid A→B edge), less than
+    // the raw count. This pins the orphan-filter behavior.
+    expect(stats.edgeCount).toBe(1);
+    expect(stats.edgeCount).toBeLessThan(rawCount);
+    // rank() must not crash — it completes.
+    expect(stats.nodeCount).toBe(2);
+    db.close();
+  });
+});

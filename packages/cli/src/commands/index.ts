@@ -26,7 +26,6 @@ export function registerIndex(program: Command): void {
           const scipPath = path.resolve(opts.scip);
           const scipStats = await engine.importScip({
             scipPath,
-            repoRoot: absRepo,
           });
           console.error(
             `[cv index --scip] ${scipStats.documents} documents, ` +
