@@ -14,6 +14,8 @@ import type {
   ExpandEntry,
 } from "@codingverse/shared";
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
+import nodePath from "node:path";
 import { ingest } from "./ingest/index.js";
 import { parseFiles, parseFilesCached } from "./parse/index.js";
 import { TokenBudget, buildTokenTreemap, type FileTokenCount } from "./budget/index.js";
@@ -99,6 +101,14 @@ export class Engine {
    * `.codingverse/` directory.
    */
   private indexDb: IndexDb | null = null;
+  /**
+   * v2-polish: transient read-only IndexDb connections opened by
+   * `pagerankImportanceProvider()` when a one-shot `cv pack` finds an
+   * existing index.db on disk (from a prior `cv index`/`cv rank`) but
+   * `this.indexDb` is null (pack never opens the rw index). Closed after
+   * compress() finishes in pack() and in close().
+   */
+  private transientDbs: IndexDb[] = [];
   private closed = false;
 
   private constructor(repoPath: string, options: EngineOptions) {
@@ -200,6 +210,21 @@ export class Engine {
     this.lastCacheStats = stats;
 
     const db = this.ensureIndexDb();
+    // v2-polish: snapshot pre-index scip-edge + ranked-node counts so the
+    // CLI can warn that a full re-index resets them. Queried BEFORE
+    // pruneFiles/store.write() — a full write deletes nodes per file (FK
+    // cascade drops ALL edges incl. provenance='scip') and inserts
+    // pagerank=0 for every node, so these counts reflect what will be lost.
+    const scipEdgesBefore = (
+      db.db
+        .prepare("SELECT COUNT(*) AS n FROM edges WHERE provenance = 'scip'")
+        .get() as { n: number } | undefined
+    )?.n ?? 0;
+    const rankedNodesBefore = (
+      db.db
+        .prepare("SELECT COUNT(*) AS n FROM nodes WHERE pagerank > 0")
+        .get() as { n: number } | undefined
+    )?.n ?? 0;
     const store = new IndexStore(db);
     store.pruneFiles(livePaths);
     const storeStats = store.write({ parsed, sources });
@@ -214,6 +239,8 @@ export class Engine {
       edges: resolveStats.resolved,
       chunks: storeStats.chunks,
       durationMs: Date.now() - start,
+      scipEdgesBefore,
+      rankedNodesBefore,
     };
   }
 
@@ -269,9 +296,22 @@ export class Engine {
 
     // v2: pagerank-aware importance when the index is already open; else
     // undefined → compress falls back to v1 heuristics (lazy-IndexDb safe).
+    // v2-polish: a one-shot pack may also transiently open a read-only
+    // prior index.db (registered in transientDbs) — closed after compress.
     const importanceProvider = this.pagerankImportanceProvider();
 
-    const result = await compress(parsed, sources, opts, this.repoPath, importanceProvider);
+    let result;
+    try {
+      result = await compress(
+        parsed,
+        sources,
+        opts,
+        this.repoPath,
+        importanceProvider,
+      );
+    } finally {
+      this.closeTransientDbs();
+    }
     this.lastExpandMap = result.expandMap;
 
     // Persist the expand map so a separate `cv expand <id>` process can
@@ -502,22 +542,64 @@ export class Engine {
 
   /**
    * Build a file-importance provider that reads persisted pagerank from the
-   * SQLite index, for compress()'s layer selection. Returns undefined when
-   * the index was never opened in this process, so a standalone `cv pack`
-   * falls back to v1 heuristics and never creates index.db (lazy-IndexDb
-   * invariant). When the index IS open, the provider returns the file's
-   * average pagerank (0 if unranked → compress falls back to v1 per-file).
+   * SQLite index, for compress()'s layer selection.
+   *
+   * v2-polish (Item 1): when `this.indexDb` is already open (from index/
+   * search/rank in THIS process), reuse it. When it is null (a one-shot
+   * `cv pack` that never opened the rw index) BUT an index.db file exists on
+   * disk from a prior `cv index`/`cv rank`, open it READ-ONLY transiently to
+   * read pagerank, then close after compress() (registered in
+   * `this.transientDbs`). The `existsSync` guard is critical: a fresh repo
+   * with no prior index must NOT create an index.db (lazy invariant).
+   *
+   * v2-polish (Item 3): uses MAX(pagerank) per file, not AVG. A file
+   * containing one high-pagerank hub plus several low-pagerank leaf helpers
+   * gets MAX≈the hub (correctly high) — AVG would be pulled down by the
+   * leaves and rank it below a single-medium-hub file. A file's importance
+   * is its highest-pagerank symbol.
+   *
+   * Returns undefined when the engine is closed or no index is available,
+   * so a standalone `cv pack` on a never-indexed repo falls back to v1
+   * heuristics and never creates index.db.
    */
   private pagerankImportanceProvider(): ((path: string) => number) | undefined {
-    if (this.closed || !this.indexDb) return undefined;
-    const stmt = this.indexDb.db.prepare(
-      "SELECT AVG(pagerank) AS avg FROM nodes WHERE file_path = ?",
-    );
-    return (filePath: string): number => {
-      const row = stmt.get(filePath) as { avg: number | null } | undefined;
-      const avg = row?.avg ?? 0;
-      return avg > 0 ? avg : 0;
-    };
+    if (this.closed) return undefined;
+    if (this.indexDb) {
+      const stmt = this.indexDb.db.prepare(
+        "SELECT MAX(pagerank) AS max FROM nodes WHERE file_path = ?",
+      );
+      return (filePath: string): number => {
+        const row = stmt.get(filePath) as { max: number | null } | undefined;
+        return row?.max ?? 0;
+      };
+    }
+    const indexPath = nodePath.join(this.repoPath, STATE_DIR, "index.db");
+    if (!existsSync(indexPath)) return undefined;
+    try {
+      const transientDb = new IndexDb({ dbPath: indexPath, readOnly: true });
+      const stmt = transientDb.db.prepare(
+        "SELECT MAX(pagerank) AS max FROM nodes WHERE file_path = ?",
+      );
+      this.transientDbs.push(transientDb);
+      return (filePath: string): number => {
+        const row = stmt.get(filePath) as { max: number | null } | undefined;
+        return row?.max ?? 0;
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Close any transient read-only index connections opened for pack(). */
+  private closeTransientDbs(): void {
+    for (const db of this.transientDbs) {
+      try {
+        db.close();
+      } catch {
+        // best-effort: a read-only close failing is non-fatal
+      }
+    }
+    this.transientDbs = [];
   }
 
   /** Dashboard data source: all observation state in one call. */
@@ -535,6 +617,7 @@ export class Engine {
   async close(): Promise<void> {
     if (this.closed) return;
     try {
+      this.closeTransientDbs();
       this.indexDb?.close();
     } finally {
       this.closed = true;

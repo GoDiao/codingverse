@@ -6,6 +6,7 @@ import path from "node:path";
 import { Engine } from "./Engine.js";
 import { disposeParsers } from "./parse/index.js";
 import { symbolId } from "./indexdb/ids.js";
+import { IndexDb } from "./indexdb/index.js";
 import { STATE_DIR } from "@codingverse/shared";
 import type { IndexStats, SearchHit, PackResult } from "@codingverse/shared";
 
@@ -530,5 +531,180 @@ describe("Engine.search — relatedNodes pagerank ordering (v2)", () => {
       expect(h.relatedNodes[0]).toBe(hubId);
     }
     await engine.close();
+  });
+});
+
+describe("Engine.pack — transient read-only pagerank for one-shot CLI pack (v2-polish Item 1)", () => {
+  it("a fresh Engine (indexDb null) reads pagerank from an existing index.db via a transient read-only open", async () => {
+    const clean = await fsp.mkdtemp(path.join(os.tmpdir(), "cv-v2-transient-pr-"));
+    try {
+      await fsp.writeFile(path.join(clean, "hub.ts"), "function hub() { return 1; }\n");
+      await fsp.writeFile(path.join(clean, "leaf.ts"), "function leaf() { return 1; }\n");
+      await fsp.writeFile(
+        path.join(clean, "callers.ts"),
+        "function c1() { return hub(); }\nfunction c2() { return hub(); }\nfunction c3() { return hub(); }\n",
+      );
+      // Process 1: index + rank + close → index.db exists on disk with
+      // pagerank but no live rw connection.
+      const e1 = await Engine.open(clean);
+      await e1.index();
+      await e1.rank();
+      await e1.close();
+      expect(fs.existsSync(indexPath(clean))).toBe(true);
+
+      // Process 2: a fresh Engine (indexDb null) packs. The provider must
+      // transiently open the existing index.db read-only and read MAX pagerank,
+      // so the high-pagerank hub stays full under a tight budget — same
+      // outcome as the in-process test, but via the transient path.
+      const e2 = await Engine.open(clean);
+      const probe = await e2.pack();
+      const hubFull = probe.files.find((f) => f.path === "hub.ts")!.tokens;
+      const leafFull = probe.files.find((f) => f.path === "leaf.ts")!.tokens;
+      const tight = Math.max(hubFull, leafFull);
+      const result = await e2.pack({ tokenBudget: tight });
+      expect(result.layerMap["hub.ts"]).toBe("full");
+      expect(result.layerMap["leaf.ts"]).not.toBe("full");
+      await e2.close();
+    } finally {
+      await fsp.rm(clean, { recursive: true, force: true });
+    }
+  });
+
+  it("a fresh Engine on a never-indexed repo still does NOT create index.db (lazy invariant holds)", async () => {
+    const clean = await fsp.mkdtemp(path.join(os.tmpdir(), "cv-v2-transient-lazy-"));
+    try {
+      const engine = await Engine.open(clean);
+      await engine.pack();
+      await engine.close();
+      expect(fs.existsSync(indexPath(clean))).toBe(false);
+    } finally {
+      await fsp.rm(clean, { recursive: true, force: true });
+    }
+  });
+
+  it("transient dbs are closed after pack — a second pack on the same engine does not throw", async () => {
+    const clean = await fsp.mkdtemp(path.join(os.tmpdir(), "cv-v2-transient-repack-"));
+    try {
+      await fsp.writeFile(path.join(clean, "hub.ts"), HUB);
+      const e1 = await Engine.open(clean);
+      await e1.index();
+      await e1.rank();
+      await e1.close();
+
+      const e2 = await Engine.open(clean);
+      await e2.pack();
+      // Second pack re-opens a fresh transient read-only db (the first was
+      // closed in the first pack's finally). Must not throw "database is
+      // closed" or leak a locked handle.
+      await expect(e2.pack()).resolves.toBeDefined();
+      await e2.close();
+    } finally {
+      await fsp.rm(clean, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("Engine.index — re-index hint counts (v2-polish Item 2)", () => {
+  it("index() reports scipEdgesBefore and rankedNodesBefore before a full re-index resets them", async () => {
+    const clean = await fsp.mkdtemp(path.join(os.tmpdir(), "cv-v2-reindex-hint-"));
+    try {
+      await fsp.writeFile(path.join(clean, "hub.ts"), HUB);
+      const engine = await Engine.open(clean);
+      await engine.index();
+      await engine.rank();
+      await engine.close();
+
+      // Seed a scip-provenance edge directly (simulates `cv index --scip`).
+      const seed = new IndexDb({ dbPath: path.join(clean, STATE_DIR, "index.db") });
+      seed.migrate();
+      const hubId = symbolId("hub.ts", "hub");
+      const f1Id = symbolId("hub.ts", "f1");
+      seed.db
+        .prepare(
+          "INSERT INTO edges (source, target, kind, provenance) VALUES (?, ?, 'calls', 'scip')",
+        )
+        .run(f1Id, hubId);
+      seed.close();
+
+      // Re-index: counts must reflect the pre-index state (scip edge + ranked nodes).
+      const e2 = await Engine.open(clean);
+      const stats = await e2.index();
+      expect(stats.scipEdgesBefore).toBeGreaterThan(0);
+      expect(stats.rankedNodesBefore).toBeGreaterThan(0);
+      await e2.close();
+
+      // After the full re-index, scip edges (FK cascade on node delete) +
+      // pagerank (nodes inserted with pagerank=0) are gone — a subsequent
+      // index() reports neither.
+      const e3 = await Engine.open(clean);
+      const stats2 = await e3.index();
+      expect(stats2.scipEdgesBefore ?? 0).toBe(0);
+      expect(stats2.rankedNodesBefore ?? 0).toBe(0);
+      await e3.close();
+    } finally {
+      await fsp.rm(clean, { recursive: true, force: true });
+    }
+  });
+
+  it("index() on a fresh repo reports no scip edges and no ranked nodes", async () => {
+    const clean = await fsp.mkdtemp(path.join(os.tmpdir(), "cv-v2-reindex-fresh-"));
+    try {
+      await fsp.writeFile(path.join(clean, "a.ts"), SAMPLE_A);
+      const engine = await Engine.open(clean);
+      const stats = await engine.index();
+      expect(stats.scipEdgesBefore ?? 0).toBe(0);
+      expect(stats.rankedNodesBefore ?? 0).toBe(0);
+      await engine.close();
+    } finally {
+      await fsp.rm(clean, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("Engine.pack — MAX pagerank aggregate (v2-polish Item 3)", () => {
+  it("a file with 1 high-pagerank hub + 5 leaf helpers outranks a medium-hub-only file under a tight budget (MAX, not AVG)", async () => {
+    const clean = await fsp.mkdtemp(path.join(os.tmpdir(), "cv-v2-max-agg-"));
+    try {
+      // ahub.ts: one high-pagerank hub (called by 4 external callers) plus 5
+      // low-pagerank leaf helpers nobody calls. MAX = aHub's high pagerank;
+      // AVG would be pulled down by the 5 leaves → ahub would rank below bhub.
+      await fsp.writeFile(
+        path.join(clean, "ahub.ts"),
+        "function aHub() { return 1; }\n" +
+          "function aLeaf1() { return 1; }\n" +
+          "function aLeaf2() { return 1; }\n" +
+          "function aLeaf3() { return 1; }\n" +
+          "function aLeaf4() { return 1; }\n" +
+          "function aLeaf5() { return 1; }\n",
+      );
+      // bhub.ts: one medium-pagerank hub called by only 1 caller.
+      await fsp.writeFile(path.join(clean, "bhub.ts"), "function bHub() { return 1; }\n");
+      // External callers: 4 → aHub (high pagerank), 1 → bHub (medium).
+      await fsp.writeFile(
+        path.join(clean, "callers.ts"),
+        "function ac1() { return aHub(); }\n" +
+          "function ac2() { return aHub(); }\n" +
+          "function ac3() { return aHub(); }\n" +
+          "function ac4() { return aHub(); }\n" +
+          "function bc1() { return bHub(); }\n",
+      );
+
+      const engine = await Engine.open(clean);
+      await engine.index();
+      await engine.rank();
+
+      const probe = await engine.pack();
+      const ahubFull = probe.files.find((f) => f.path === "ahub.ts")!.tokens;
+      const bhubFull = probe.files.find((f) => f.path === "bhub.ts")!.tokens;
+      // Budget fits exactly one of the two hub files at full (the larger one),
+      // so the higher-importance file wins the full slot.
+      const tight = Math.max(ahubFull, bhubFull);
+      const result = await engine.pack({ tokenBudget: tight });
+      expect(result.layerMap["ahub.ts"]).toBe("full");
+      expect(result.layerMap["bhub.ts"]).not.toBe("full");
+      await engine.close();
+    } finally {
+      await fsp.rm(clean, { recursive: true, force: true });
+    }
   });
 });

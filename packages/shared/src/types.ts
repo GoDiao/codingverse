@@ -287,6 +287,19 @@ export interface IndexStats {
   edges: number;
   chunks: number;
   durationMs: number;
+  /**
+   * v2-polish: scip-provenance edges that existed BEFORE this index() run.
+   * A full re-index deletes nodes per file (FK cascade drops ALL edges,
+   * including provenance='scip'), so this count lets the CLI warn the user
+   * to re-run `cv index --scip`. Undefined/0 when no scip edges were present.
+   */
+  scipEdgesBefore?: number;
+  /**
+   * v2-polish: nodes with non-zero pagerank BEFORE this index() run. A full
+   * re-index inserts pagerank=0 for all nodes, so this count lets the CLI
+   * warn the user to re-run `cv rank`. Undefined/0 when none were ranked.
+   */
+  rankedNodesBefore?: number;
 }
 
 // ─────────────────────────────────────────────────────────────

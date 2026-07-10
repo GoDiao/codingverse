@@ -47,6 +47,14 @@ export interface DbOptions {
   dbPath?: string;
   /** Repo root — used to derive the default path `<repoRoot>/.codingverse/index.db`. */
   repoRoot?: string;
+  /**
+   * Open the database read-only. A read-only open throws if the file does
+   * not exist (caller must guard with fs.existsSync), and cannot run migrate()
+   * (CREATE TABLE on a read-only db throws). Used by Engine's transient
+   * pagerank provider so a one-shot `cv pack` can read a prior `cv rank`
+   * without creating or mutating index.db.
+   */
+  readOnly?: boolean;
 }
 
 export class IndexDb {
@@ -55,10 +63,12 @@ export class IndexDb {
 
   constructor(opts: DbOptions = {}) {
     const dbPath = resolveDbPath(opts);
-    if (dbPath !== ":memory:") {
+    if (dbPath !== ":memory:" && !opts.readOnly) {
       fs.mkdirSync(path.dirname(dbPath), { recursive: true });
     }
-    this.db = new DatabaseSync(dbPath);
+    this.db = opts.readOnly
+      ? new DatabaseSync(dbPath, { readOnly: true })
+      : new DatabaseSync(dbPath);
   }
 
   /**

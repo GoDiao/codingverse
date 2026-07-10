@@ -109,10 +109,15 @@ export const compress = async (
     // Importance: code files (with symbols) rank above data/doc; larger code
     // files rank slightly higher (more likely meaningful). Pinned = +∞.
     // v2: when an importanceProvider is supplied (Engine.pack with an open
-    // index) and returns a positive avg pagerank for the file, scale by
-    // pagerank (1000 base so code > data, + pagerank contribution). When the
-    // provider is absent or returns 0 (unranked / no index), fall back to
-    // the v1 heuristic — identical to pre-v2 behavior.
+    // or transient read-only index) and returns a positive MAX pagerank for
+    // the file, scale by pagerank (1000 base so code > data, + pagerank
+    // contribution). When the provider is absent or returns 0 (unranked / no
+    // index), fall back to the v1 heuristic — identical to pre-v2 behavior.
+    // v2-polish: the provider returns MAX(pagerank) per file (not AVG), so
+    // `pr` is the file's highest-pagerank symbol (e.g. ~0.1 for a hub). The
+    // `* 10000` multiplier is tuned for MAX: 0.1 → importance 2000, still
+    // in a reasonable range vs v1's ~1005 base. Re-tune if pagerank scale
+    // changes.
     const pinned = isPinned(p.path);
     const importance = (() => {
       const pr = importanceProvider?.(p.path) ?? 0;
