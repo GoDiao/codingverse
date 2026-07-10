@@ -84,6 +84,8 @@ const DEFAULT_EPSILON = 1e-6;
 const DEFAULT_MAX_ITER = 100;
 const PRIVATE_FACTOR = 0.1;
 const OVERHEATED_FACTOR = 0.1;
+// Aider's choice: a name defined in >5 files is "over-heated" (e.g. `init`,
+// `run`) and over-contributes inbound rank if not down-weighted ×0.1.
 const OVERHEATED_FILE_THRESHOLD = 5;
 const EDGE_KIND = "calls";
 

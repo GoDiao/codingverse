@@ -47,12 +47,18 @@ export interface EngineOptions {
 /**
  * v2-4: a top-N pagerank row with display metadata, returned by
  * `Engine.topRankedNodes(n)` for `cv rank` stdout and V2-6 MCP "top symbols".
+ * V2-polish: extended with `kind` and `endLine` so `cv rank` can reuse the
+ * shared CLI `formatNode` (which prints `filePath:startLine-endLine  kind
+ * qualifiedName  [pagerank=...]`), putting rank's output line shape on par
+ * with callers / callees / impact.
  */
 export interface RankedNode {
   id: string;
   pagerank: number;
   filePath: string;
   startLine: number;
+  endLine: number;
+  kind: string;
   qualifiedName?: string;
   name: string;
 }
@@ -62,6 +68,8 @@ interface RankedNodeRow {
   pagerank: number | null;
   file_path: string;
   start_line: number | null;
+  end_line: number | null;
+  kind: string | null;
   qualified_name: string | null;
   name: string;
 }
@@ -435,7 +443,7 @@ export class Engine {
   async topRankedNodes(n: number): Promise<RankedNode[]> {
     const db = this.ensureIndexDb();
     const stmt = db.db.prepare(
-      `SELECT id, pagerank, file_path, start_line, qualified_name, name
+      `SELECT id, pagerank, file_path, start_line, end_line, kind, qualified_name, name
        FROM nodes
        ORDER BY pagerank DESC, id ASC
        LIMIT ?`,
@@ -446,6 +454,8 @@ export class Engine {
       pagerank: r.pagerank ?? 0,
       filePath: r.file_path,
       startLine: r.start_line ?? 0,
+      endLine: r.end_line ?? 0,
+      kind: r.kind ?? "",
       qualifiedName: r.qualified_name ?? undefined,
       name: r.name,
     }));

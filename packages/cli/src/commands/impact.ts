@@ -1,13 +1,7 @@
 import path from "node:path";
 import type { Command } from "commander";
 import { Engine } from "@codingverse/core";
-import type { SymbolNode } from "@codingverse/shared";
-
-function formatNode(n: SymbolNode): string {
-  const name = n.qualifiedName ?? n.name;
-  const pr = n.pagerank && n.pagerank > 0 ? `  [pagerank=${n.pagerank.toFixed(4)}]` : "";
-  return `${n.filePath}:${n.startLine}-${n.endLine}  ${n.kind}  ${name}${pr}`;
-}
+import { formatNode } from "./format.js";
 
 export function registerImpact(program: Command): void {
   program
@@ -19,7 +13,9 @@ export function registerImpact(program: Command): void {
     .action(
       async (nodeArg: string, repoPath: string, opts: { depth: string }) => {
         const absRepo = path.resolve(repoPath);
-        const depth = Number(opts.depth) || 3;
+        // depth 0 = the start node only (see callers.ts for the rationale).
+        const depth =
+          opts.depth === undefined ? 3 : Math.max(0, Number(opts.depth));
         const engine = await Engine.open(absRepo);
 
         try {

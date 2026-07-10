@@ -1,7 +1,7 @@
 {
   "name": "@codingverse/mcp",
   "version": "0.0.0",
-  "description": "codingverse MCP server — exposes pack / search / expand / get_file as MCP tools over stdio",
+  "description": "codingverse MCP server — 7 tools (search/pack/expand/get_file/callers/callees/impact) over stdio",
   "type": "module",
   "bin": {
     "cv-mcp": "./dist/bin.js"

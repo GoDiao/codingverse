@@ -151,11 +151,15 @@ async function handleGetFile(args: Record<string, unknown>): Promise<CallToolRes
   return textResult(content);
 }
 
-/** Coerce args.depth to a finite number, or return the given default. */
+/** Coerce args.depth to a finite number ≥ 0, or return the given default. */
 function depthArg(value: unknown, fallback: number): number {
   if (value === undefined || value === null) return fallback;
   const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
+  // Clamp negatives to 0 so BFS depth can't go below "start node only" —
+  // harmless today (bfs's `for d=1..depth` would just be a no-op), but
+  // defensive against a future caller that pushes depth into Math.sign etc.
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, n);
 }
 
 /** callers tool: reverse BFS along call edges, returns {count, nodes} JSON. */

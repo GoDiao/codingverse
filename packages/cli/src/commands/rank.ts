@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { Command } from "commander";
 import { Engine } from "@codingverse/core";
+import { formatNode } from "./format.js";
 
 export function registerRank(program: Command): void {
   program
@@ -12,14 +13,29 @@ export function registerRank(program: Command): void {
     .action(
       async (repoPath: string, opts: { damping: string; maxIter: string }) => {
         const absRepo = path.resolve(repoPath);
-        const damping = Number(opts.damping);
-        const maxIter = Number(opts.maxIter);
         const engine = await Engine.open(absRepo);
 
         try {
+          const damping = Number(opts.damping);
+          const maxIter = Number(opts.maxIter);
+          // Surface invalid --damping / --max-iter on stderr instead of
+          // silently falling back — keeps `cv rank --damping abc` debuggable.
+          const dampingFinite = Number.isFinite(damping);
+          const maxIterFinite = Number.isFinite(maxIter);
+          if (opts.damping !== undefined && !dampingFinite) {
+            console.error(
+              `[cv rank] warning: invalid --damping "${opts.damping}", using default 0.85`,
+            );
+          }
+          if (opts.maxIter !== undefined && !maxIterFinite) {
+            console.error(
+              `[cv rank] warning: invalid --max-iter "${opts.maxIter}", using default 100`,
+            );
+          }
+
           const stats = await engine.rank({
-            damping: Number.isFinite(damping) ? damping : undefined,
-            maxIter: Number.isFinite(maxIter) ? maxIter : undefined,
+            damping: dampingFinite ? damping : undefined,
+            maxIter: maxIterFinite ? maxIter : undefined,
           });
 
           if (stats.nodeCount === 0) {
@@ -28,11 +44,11 @@ export function registerRank(program: Command): void {
           }
 
           const top = await engine.topRankedNodes(20);
+          // rank's rows always have pagerank > 0 after engine.rank(), so
+          // formatNode's pagerank>0 gate surfaces the score on every line
+          // (matching callers/callees/impact's line shape per B5/C2).
           for (const r of top) {
-            const name = r.qualifiedName ?? r.name;
-            console.log(
-              `${r.pagerank.toFixed(6)}  ${r.filePath}:${r.startLine}  ${name}`,
-            );
+            console.log(formatNode(r));
           }
 
           const convergedTxt = stats.converged
