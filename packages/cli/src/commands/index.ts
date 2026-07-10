@@ -32,8 +32,9 @@ export function registerIndex(program: Command): void {
           const reset: string[] = [];
           if (scipBefore > 0) reset.push(`${scipBefore} scip edges`);
           if (rankedBefore > 0) reset.push("pagerank");
+          const verb = scipBefore > 0 ? "were" : "was";
           console.error(
-            `[cv index] note: ${reset.join(" and ")} were reset. ` +
+            `[cv index] note: ${reset.join(" and ")} ${verb} reset. ` +
               `Re-run with --scip <path> and/or cv rank to restore.`,
           );
         }

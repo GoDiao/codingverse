@@ -577,10 +577,14 @@ export class Engine {
     if (!existsSync(indexPath)) return undefined;
     try {
       const transientDb = new IndexDb({ dbPath: indexPath, readOnly: true });
+      // Push BEFORE prepare(): if prepare throws (e.g. corrupt/empty index.db
+      // with no `nodes` table), the catch returns undefined but the handle is
+      // already registered so closeTransientDbs() can close it. Pushing after
+      // prepare would leak the handle on prepare failure.
+      this.transientDbs.push(transientDb);
       const stmt = transientDb.db.prepare(
         "SELECT MAX(pagerank) AS max FROM nodes WHERE file_path = ?",
       );
-      this.transientDbs.push(transientDb);
       return (filePath: string): number => {
         const row = stmt.get(filePath) as { max: number | null } | undefined;
         return row?.max ?? 0;
