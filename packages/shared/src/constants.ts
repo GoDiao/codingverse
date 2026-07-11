@@ -24,6 +24,8 @@ export const STATE_DIR = ".codingverse";
 export const DEFAULT_IGNORE: readonly string[] = [
   "**/node_modules/**",
   "**/.git/**",
+  ".codingverse/**",
+  "**/.codingverse/**",
   "**/dist/**",
   "**/build/**",
   "**/out/**",

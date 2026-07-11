@@ -8,7 +8,7 @@ import { disposeParsers } from "./parse/index.js";
 import { symbolId } from "./indexdb/ids.js";
 import { IndexDb } from "./indexdb/index.js";
 import { STATE_DIR } from "@codingverse/shared";
-import type { IndexStats, SearchHit, PackResult } from "@codingverse/shared";
+import type { IndexStats, SearchHit, PackResult, DashboardStats } from "@codingverse/shared";
 
 afterAll(() => disposeParsers());
 
@@ -702,6 +702,93 @@ describe("Engine.pack — MAX pagerank aggregate (v2-polish Item 3)", () => {
       const result = await engine.pack({ tokenBudget: tight });
       expect(result.layerMap["ahub.ts"]).toBe("full");
       expect(result.layerMap["bhub.ts"]).not.toBe("full");
+      await engine.close();
+    } finally {
+      await fsp.rm(clean, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("Engine.stats — Dashboard data source (v2.5)", () => {
+  it("returns full DashboardStats with correct counts after index()", async () => {
+    const engine = await Engine.open(dir);
+    await engine.index();
+    const stats: DashboardStats = await engine.stats();
+
+    expect(stats.index.files).toBeGreaterThan(0);
+    expect(stats.index.symbols).toBeGreaterThan(0);
+    expect(stats.index.edges).toBeGreaterThanOrEqual(0);
+    expect(stats.index.chunks).toBeGreaterThan(0);
+    expect(stats.index.dbSize).toBeGreaterThan(0);
+    expect(stats.index.lastSync).toBeGreaterThan(0);
+    await engine.close();
+  });
+
+  it("health: counts ok/degraded/failed/skipped correctly", async () => {
+    await fsp.writeFile(path.join(dir, "data.md"), "# title\nsome prose\n");
+    const engine = await Engine.open(dir);
+    await engine.index();
+    const stats = await engine.stats();
+
+    expect(stats.health.ok).toBeGreaterThan(0);
+    expect(stats.health.degraded).toBeGreaterThanOrEqual(1);
+    expect(stats.health.failed).toBe(0);
+    expect(stats.health.skipped).toBe(0);
+
+    const total = stats.health.ok + stats.health.degraded + stats.health.failed + stats.health.skipped;
+    expect(total).toBe(stats.index.files);
+    await engine.close();
+  });
+
+  it("languages: groups files by language", async () => {
+    const engine = await Engine.open(dir);
+    await engine.index();
+    const stats = await engine.stats();
+
+    expect(stats.languages.typescript).toBeGreaterThan(0);
+    const totalFiles = Object.values(stats.languages).reduce((a, b) => a + b, 0);
+    expect(totalFiles).toBe(stats.index.files);
+    await engine.close();
+  });
+
+  it("tokenMap: treemap root has non-zero tokens from chunks.token_count", async () => {
+    const engine = await Engine.open(dir);
+    await engine.index();
+    const stats = await engine.stats();
+
+    expect(stats.tokenMap).toBeDefined();
+    expect(stats.tokenMap.tokens).toBeGreaterThan(0);
+    expect(stats.tokenMap.children).toBeDefined();
+    expect(stats.tokenMap.children!.length).toBeGreaterThan(0);
+    await engine.close();
+  });
+
+  it("syncQueue is empty (V2.5-4 fills runtime state)", async () => {
+    const engine = await Engine.open(dir);
+    await engine.index();
+    const stats = await engine.stats();
+    expect(stats.syncQueue).toEqual([]);
+    await engine.close();
+  });
+
+  it("returns zeros/empty on a fresh engine with no index() (no throw)", async () => {
+    const clean = await fsp.mkdtemp(path.join(os.tmpdir(), "cv-stats-empty-"));
+    try {
+      const engine = await Engine.open(clean);
+      const stats = await engine.stats();
+
+      expect(stats.index.files).toBe(0);
+      expect(stats.index.symbols).toBe(0);
+      expect(stats.index.edges).toBe(0);
+      expect(stats.index.chunks).toBe(0);
+      expect(stats.index.lastSync).toBe(0);
+      expect(stats.health.ok).toBe(0);
+      expect(stats.health.degraded).toBe(0);
+      expect(stats.health.failed).toBe(0);
+      expect(stats.health.skipped).toBe(0);
+      expect(stats.languages).toEqual({});
+      expect(stats.tokenMap.tokens).toBe(0);
+      expect(stats.syncQueue).toEqual([]);
       await engine.close();
     } finally {
       await fsp.rm(clean, { recursive: true, force: true });

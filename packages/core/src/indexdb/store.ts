@@ -4,6 +4,7 @@ import type { ParsedFile, RawSymbol, Chunk, RawRef } from "@codingverse/shared";
 import type { IndexDb } from "./db.js";
 import { symbolId, qualifiedName } from "./ids.js";
 import { gitBlobHash } from "../cache/index.js";
+import { TokenBudget } from "../budget/index.js";
 
 /**
  * V1-2 IndexStore — write layer that persists ParsedFile[] into SQLite.
@@ -41,6 +42,7 @@ export interface StoreStats {
 
 export class IndexStore {
   private readonly db: IndexDb;
+  private readonly tokenBudget: TokenBudget;
   private readonly insertNode: StatementSync;
   private readonly insertChunk: StatementSync;
   private readonly insertUnresolved: StatementSync;
@@ -51,8 +53,11 @@ export class IndexStore {
   private readonly deleteFileByPath: StatementSync;
   private readonly allFiles: StatementSync;
 
-  constructor(db: IndexDb) {
+  constructor(db: IndexDb, repoRoot?: string) {
     this.db = db;
+    this.tokenBudget = new TokenBudget(
+      repoRoot ? { repoRoot } : { noCache: true },
+    );
     const d = db.db;
     this.insertNode = d.prepare(
       `INSERT OR REPLACE INTO nodes
@@ -86,12 +91,12 @@ export class IndexStore {
   }
 
   /** Full write: clear old rows per file, insert new. Single transaction. */
-  write(input: StoreInput): StoreStats {
+  async write(input: StoreInput): Promise<StoreStats> {
     return this.writeWithFilter(input, () => true);
   }
 
   /** Incremental write: only process changedPaths. Unchanged files untouched. */
-  writeIncremental(input: StoreInput, changedPaths: Set<string>): StoreStats {
+  async writeIncremental(input: StoreInput, changedPaths: Set<string>): Promise<StoreStats> {
     return this.writeWithFilter(input, (p) => changedPaths.has(p.path));
   }
 
@@ -127,11 +132,12 @@ export class IndexStore {
     return deleted;
   }
 
-  private writeWithFilter(
+  private async writeWithFilter(
     input: StoreInput,
     shouldProcess: (p: ParsedFile) => boolean,
-  ): StoreStats {
+  ): Promise<StoreStats> {
     const stats: StoreStats = { nodes: 0, edges: 0, chunks: 0, files: 0, unresolved: 0 };
+    await this.tokenBudget.init();
     this.db.db.exec("BEGIN");
     try {
       for (const p of input.parsed) {
@@ -163,6 +169,7 @@ export class IndexStore {
       }
       throw e;
     }
+    await this.tokenBudget.flush();
     return stats;
   }
 
@@ -299,6 +306,8 @@ export class IndexStore {
   }
 
   private chunkParams(p: ParsedFile, chunk: Chunk) {
+    const tokens = this.tokenBudget.count(chunk.body);
+    chunk.tokenCount = tokens;
     return {
       id: chunk.id,
       filePath: p.path,
@@ -306,7 +315,7 @@ export class IndexStore {
       startLine: chunk.startLine,
       endLine: chunk.endLine,
       body: chunk.body,
-      tokenCount: chunk.tokenCount ?? null,
+      tokenCount: tokens,
     };
   }
 

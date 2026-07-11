@@ -12,9 +12,10 @@ import type {
   Chunk,
   TreemapNode,
   ExpandEntry,
+  ParseStatus,
 } from "@codingverse/shared";
 import fs from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import nodePath from "node:path";
 import { ingest } from "./ingest/index.js";
 import { parseFiles, parseFilesCached } from "./parse/index.js";
@@ -225,9 +226,9 @@ export class Engine {
         .prepare("SELECT COUNT(*) AS n FROM nodes WHERE pagerank > 0")
         .get() as { n: number } | undefined
     )?.n ?? 0;
-    const store = new IndexStore(db);
+    const store = new IndexStore(db, this.repoPath);
     store.pruneFiles(livePaths);
-    const storeStats = store.write({ parsed, sources });
+    const storeStats = await store.write({ parsed, sources });
 
     const resolver = new RefResolver(db);
     const resolveStats = resolver.resolveAll();
@@ -608,7 +609,84 @@ export class Engine {
 
   /** Dashboard data source: all observation state in one call. */
   async stats(): Promise<DashboardStats> {
-    throw new Error("Engine.stats not implemented (v2.5)");
+    const db = this.ensureIndexDb();
+    const d = db.db;
+    const indexPath = nodePath.join(this.repoPath, STATE_DIR, "index.db");
+
+    const countOf = (sql: string): number =>
+      (d.prepare(sql).get() as { n: number } | undefined)?.n ?? 0;
+
+    const files = countOf("SELECT COUNT(*) AS n FROM files");
+    const symbols = countOf("SELECT COUNT(*) AS n FROM nodes");
+    const edges = countOf("SELECT COUNT(*) AS n FROM edges");
+    const chunks = countOf("SELECT COUNT(*) AS n FROM chunks");
+
+    let dbSize = 0;
+    try {
+      dbSize = statSync(indexPath).size;
+    } catch {
+      // index.db may not exist yet
+    }
+
+    const lastSyncRow = d.prepare("SELECT MAX(indexed_at) AS t FROM files").get() as
+      | { t: number | null }
+      | undefined;
+    const lastSync = lastSyncRow?.t ?? 0;
+
+    const health: Record<ParseStatus, number> = {
+      ok: 0,
+      degraded: 0,
+      failed: 0,
+      skipped: 0,
+    };
+    const healthRows = d
+      .prepare("SELECT parse_status, COUNT(*) AS n FROM files GROUP BY parse_status")
+      .all() as Array<{ parse_status: string; n: number }>;
+    for (const row of healthRows) {
+      switch (row.parse_status) {
+        case "ok":
+          health.ok = row.n;
+          break;
+        case "degraded":
+          health.degraded = row.n;
+          break;
+        case "failed":
+          health.failed = row.n;
+          break;
+        case "skipped":
+          health.skipped = row.n;
+          break;
+      }
+    }
+
+    const langRows = d
+      .prepare("SELECT language, COUNT(*) AS n FROM files GROUP BY language")
+      .all() as Array<{ language: string; n: number }>;
+    const languages: Record<string, number> = {};
+    for (const row of langRows) {
+      languages[row.language] = row.n;
+    }
+
+    const tokenRows = d
+      .prepare(
+        "SELECT file_path, SUM(COALESCE(token_count, 0)) AS tokens FROM chunks GROUP BY file_path",
+      )
+      .all() as Array<{ file_path: string; tokens: number | null }>;
+    const fileTokenCounts: FileTokenCount[] = tokenRows.map((r) => ({
+      path: r.file_path,
+      tokens: r.tokens ?? 0,
+    }));
+    const tokenMap = buildTokenTreemap(fileTokenCounts);
+
+    const syncQueue: { path: string; status: string }[] = [];
+
+    return {
+      index: { files, symbols, edges, chunks, dbSize, lastSync },
+      health,
+      languages,
+      tokenMap,
+      syncQueue,
+    };
   }
 
   /**

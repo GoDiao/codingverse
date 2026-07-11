@@ -40,7 +40,7 @@ const seed = async (
   const db = new IndexDb({ dbPath: ":memory:" });
   db.migrate();
   const store = new IndexStore(db);
-  store.write({ parsed, sources: srcMap(parsed, contents) });
+  await store.write({ parsed, sources: srcMap(parsed, contents) });
   const engine = new SearchEngine(db);
   return { db, parsed, engine };
 };

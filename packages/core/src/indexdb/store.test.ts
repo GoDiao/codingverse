@@ -33,7 +33,7 @@ describe("IndexStore write — counts and FTS5", () => {
     const db = new IndexDb({ dbPath: ":memory:" });
     db.migrate();
     const store = new IndexStore(db);
-    const stats = store.write({ parsed, sources: srcMap(parsed, { "a.ts": A, "b.ts": B }) });
+    const stats = await store.write({ parsed, sources: srcMap(parsed, { "a.ts": A, "b.ts": B }) });
 
     expect(stats.files).toBe(2);
     expect(stats.nodes).toBe(parsed[0]!.symbols.length + parsed[1]!.symbols.length);
@@ -67,7 +67,7 @@ describe("IndexStore write — files table", () => {
     const db = new IndexDb({ dbPath: ":memory:" });
     db.migrate();
     const store = new IndexStore(db);
-    store.write({ parsed, sources: srcMap(parsed, { "a.ts": A }) });
+    await store.write({ parsed, sources: srcMap(parsed, { "a.ts": A }) });
 
     const row = db.db
       .prepare("SELECT path, git_blob_hash, content_hash, language, size, node_count, parse_status FROM files WHERE path = ?")
@@ -96,7 +96,7 @@ describe("IndexStore write — files table", () => {
     const db = new IndexDb({ dbPath: ":memory:" });
     db.migrate();
     const store = new IndexStore(db);
-    store.write({ parsed, sources: srcMap(parsed, { "data.xyz": "some content\nhere\n" }) });
+    await store.write({ parsed, sources: srcMap(parsed, { "data.xyz": "some content\nhere\n" }) });
 
     const row = db.db
       .prepare("SELECT parse_status FROM files WHERE path = ?")
@@ -113,7 +113,7 @@ describe("IndexStore write — unresolved_refs", () => {
     const db = new IndexDb({ dbPath: ":memory:" });
     db.migrate();
     const store = new IndexStore(db);
-    store.write({ parsed, sources: srcMap(parsed, { "calls.ts": src }) });
+    await store.write({ parsed, sources: srcMap(parsed, { "calls.ts": src }) });
 
     const rows = db.db
       .prepare("SELECT from_node_id, reference_name, reference_kind, line FROM unresolved_refs")
@@ -138,7 +138,7 @@ describe("IndexStore write — unresolved_refs", () => {
     const db = new IndexDb({ dbPath: ":memory:" });
     db.migrate();
     const store = new IndexStore(db);
-    store.write({ parsed, sources: srcMap(parsed, { "nest.ts": src }) });
+    await store.write({ parsed, sources: srcMap(parsed, { "nest.ts": src }) });
 
     const rows = db.db
       .prepare("SELECT from_node_id, reference_name FROM unresolved_refs WHERE reference_name = ?")
@@ -154,7 +154,7 @@ describe("IndexStore write — unresolved_refs", () => {
     const db = new IndexDb({ dbPath: ":memory:" });
     db.migrate();
     const store = new IndexStore(db);
-    store.write({ parsed, sources: srcMap(parsed, { "l1.ts": src }) });
+    await store.write({ parsed, sources: srcMap(parsed, { "l1.ts": src }) });
 
     const row = db.db
       .prepare("SELECT from_node_id, line FROM unresolved_refs WHERE reference_name = ?")
@@ -177,7 +177,7 @@ describe("IndexStore write — unresolved_refs", () => {
     const db = new IndexDb({ dbPath: ":memory:" });
     db.migrate();
     const store = new IndexStore(db);
-    store.write({ parsed, sources: srcMap(parsed, { "filler.ts": src }) });
+    await store.write({ parsed, sources: srcMap(parsed, { "filler.ts": src }) });
 
     const row = db.db
       .prepare("SELECT from_node_id, line FROM unresolved_refs WHERE reference_name = ?")
@@ -197,7 +197,7 @@ describe("IndexStore write — unresolved_refs", () => {
     const db = new IndexDb({ dbPath: ":memory:" });
     db.migrate();
     const store = new IndexStore(db);
-    store.write({ parsed, sources: srcMap(parsed, { "top.ts": src }) });
+    await store.write({ parsed, sources: srcMap(parsed, { "top.ts": src }) });
 
     const row = db.db
       .prepare("SELECT from_node_id, line FROM unresolved_refs WHERE reference_name = ?")
@@ -218,7 +218,7 @@ describe("IndexStore write — unresolved_refs", () => {
     const db = new IndexDb({ dbPath: ":memory:" });
     db.migrate();
     const store = new IndexStore(db);
-    const stats = store.write({ parsed, sources: srcMap(parsed, { "data.md": content }) });
+    const stats = await store.write({ parsed, sources: srcMap(parsed, { "data.md": content }) });
 
     expect(stats.files).toBe(1);
     expect(stats.nodes).toBe(0);
@@ -238,7 +238,7 @@ describe("IndexStore pruneFiles", () => {
     const db = new IndexDb({ dbPath: ":memory:" });
     db.migrate();
     const store = new IndexStore(db);
-    store.write({ parsed, sources: srcMap(parsed, { "a.ts": A, "b.ts": B }) });
+    await store.write({ parsed, sources: srcMap(parsed, { "a.ts": A, "b.ts": B }) });
 
     const aNodeId = symbolId("a.ts", "wizardry");
     const bNodeId = symbolId("b.ts", "sorcery");
@@ -269,7 +269,7 @@ describe("IndexStore writeIncremental", () => {
     const db = new IndexDb({ dbPath: ":memory:" });
     db.migrate();
     const store = new IndexStore(db);
-    store.write({
+    await store.write({
       parsed: [...parsedA1, ...parsedB],
       sources: srcMap([...parsedA1, ...parsedB], { "a.ts": A1, "b.ts": B }),
     });
@@ -284,7 +284,7 @@ describe("IndexStore writeIncremental", () => {
     await new Promise((r) => setTimeout(r, 15));
 
     const parsedA2 = await parseFiles([mk("a.ts", A2)]);
-    store.writeIncremental(
+    await store.writeIncremental(
       {
         parsed: [...parsedA2, ...parsedB],
         sources: srcMap([...parsedA2, ...parsedB], { "a.ts": A2, "b.ts": B }),
@@ -319,7 +319,7 @@ describe("IndexStore transaction safety", () => {
     const store = new IndexStore(db);
 
     const parsedA1 = await parseFiles([mk("a.ts", A1)]);
-    store.write({ parsed: parsedA1, sources: srcMap(parsedA1, { "a.ts": A1 }) });
+    await store.write({ parsed: parsedA1, sources: srcMap(parsedA1, { "a.ts": A1 }) });
     expect(count(db, "nodes WHERE file_path = ?", "a.ts")).toBe(1);
     const alphaIdBefore = symbolId("a.ts", "alpha");
     expect(count(db, "nodes WHERE id = ?", alphaIdBefore)).toBe(1);
@@ -331,12 +331,12 @@ describe("IndexStore transaction safety", () => {
       chunks: [{ ...(parsedB[0]!.chunks[0] as Chunk), body: null as unknown as string }],
     };
 
-    expect(() =>
+    await expect(
       store.write({
         parsed: [...parsedA2, brokenB],
         sources: srcMap([...parsedA2, parsedB[0]!], { "a.ts": A2, "b.ts": B }),
       }),
-    ).toThrow();
+    ).rejects.toThrow();
 
     expect(count(db, "nodes WHERE file_path = ?", "a.ts")).toBe(1);
     expect(count(db, "nodes WHERE id = ?", alphaIdBefore)).toBe(1);

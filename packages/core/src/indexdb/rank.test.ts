@@ -35,7 +35,7 @@ const seed = async (
   const db = new IndexDb({ dbPath: ":memory:" });
   db.migrate();
   const store = new IndexStore(db);
-  store.write({ parsed, sources: srcMap(parsed, contents) });
+  await store.write({ parsed, sources: srcMap(parsed, contents) });
   const resolver = new RefResolver(db);
   resolver.resolveAll();
   return db;
