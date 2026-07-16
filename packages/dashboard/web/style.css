@@ -1,0 +1,165 @@
+:root {
+  --bg: #0b1a2b;
+  --panel: #12243a;
+  --border: #1e3a5c;
+  --text: #e6eef7;
+  --muted: #8aa4c0;
+  --accent: #4a9eff;
+  --ok: #2ecc71;
+  --degraded: #f1c40f;
+  --failed: #e74c3c;
+  --skipped: #7f8c9d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+header h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+header .subtitle {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+main {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.board {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+}
+
+.board > h2 {
+  margin: 0 0 16px;
+  font-size: 15px;
+  color: var(--accent);
+}
+
+.board.placeholder {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+#cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  text-align: center;
+}
+
+.card-value {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.card-label {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+h3 {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 16px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0b1a2b;
+}
+
+.badge-ok { background: var(--ok); }
+.badge-degraded { background: var(--degraded); }
+.badge-failed { background: var(--failed); }
+.badge-skipped { background: var(--skipped); }
+
+.lang-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.lang-name {
+  width: 120px;
+  color: var(--muted);
+}
+
+.lang-bar {
+  height: 12px;
+  background: var(--accent);
+  border-radius: 3px;
+  min-width: 2px;
+}
+
+.lang-n {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+#treemap {
+  width: 100%;
+  min-height: 480px;
+}
+
+.treemap-label {
+  fill: #fff;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+#error {
+  background: rgba(231, 76, 60, 0.15);
+  border: 1px solid var(--failed);
+  color: #ffb4ab;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 24px;
+  font-size: 14px;
+}

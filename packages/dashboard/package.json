@@ -1,13 +1,22 @@
 {
-  "name": "codingverse",
+  "name": "@codingverse/dashboard",
   "version": "0.0.0",
-  "description": "codingverse CLI — unified Code RAG toolkit (pack / index / search / status)",
+  "description": "codingverse Dashboard — observation mode: node:http server + zero-build SPA (6 boards)",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "bin": {
-    "cv": "./dist/bin.js"
+    "cv-serve": "./dist/bin.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "web"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -17,9 +26,7 @@
   },
   "dependencies": {
     "@codingverse/core": "workspace:*",
-    "@codingverse/dashboard": "workspace:*",
-    "@codingverse/shared": "workspace:*",
-    "commander": "^13.0.0"
+    "@codingverse/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>codingverse · observe</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>codingverse <span class="mode">observe</span></h1>
+      <div id="repo" class="repo"></div>
+    </header>
+
+    <main>
+      <section class="board" id="board-overview">
+        <h2>① Index overview</h2>
+        <div id="cards" class="cards"></div>
+        <div class="split">
+          <div id="health" class="panel"></div>
+          <div id="languages" class="panel"></div>
+        </div>
+      </section>
+
+      <section class="board" id="board-tokenmap">
+        <h2>② Token map</h2>
+        <div id="treemap" class="treemap"></div>
+      </section>
+
+      <section class="board placeholder"><h2>③ Code graph</h2><p>coming in V2.5-5</p></section>
+      <section class="board placeholder"><h2>④ Search inspector</h2><p>coming in V2.5-6</p></section>
+      <section class="board placeholder"><h2>⑤ Pack preview</h2><p>coming in V2.5-7</p></section>
+      <section class="board placeholder"><h2>⑥ Sync status</h2><p>coming in V2.5-4</p></section>
+    </main>
+
+    <div id="error" class="error" hidden></div>
+
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>

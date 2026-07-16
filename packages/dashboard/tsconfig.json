@@ -5,10 +5,6 @@
     "rootDir": "./src",
     "types": ["node"]
   },
-  "references": [
-    { "path": "../shared" },
-    { "path": "../core" },
-    { "path": "../dashboard" }
-  ],
+  "references": [{ "path": "../shared" }, { "path": "../core" }],
   "include": ["src/**/*.ts"]
 }
