@@ -1,5 +1,5 @@
 import type { Language } from "@codingverse/shared";
-import { TS_TAGS } from "./typescript.js";
+import { TS_TAGS, JS_TAGS } from "./typescript.js";
 import { PY_TAGS } from "./python.js";
 
 /**
@@ -63,7 +63,7 @@ const CONFIGS: Partial<Record<Language, LanguageConfig>> = {
   javascript: {
     language: "javascript",
     wasmFile: "tree-sitter-javascript.wasm",
-    tagsQuery: TS_TAGS,
+    tagsQuery: JS_TAGS,
     chunkNodeTypes: JS_CHUNK_NODES,
     scopeStyle: "brace",
     lineComment: "//",
@@ -71,7 +71,7 @@ const CONFIGS: Partial<Record<Language, LanguageConfig>> = {
   jsx: {
     language: "jsx",
     wasmFile: "tree-sitter-javascript.wasm",
-    tagsQuery: TS_TAGS,
+    tagsQuery: JS_TAGS,
     chunkNodeTypes: JS_CHUNK_NODES,
     scopeStyle: "brace",
     lineComment: "//",

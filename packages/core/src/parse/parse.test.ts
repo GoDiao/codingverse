@@ -91,6 +91,40 @@ def sound():
   });
 });
 
+describe("parseFile — JavaScript", () => {
+  // Regression: JS/JSX must use JS_TAGS, not TS_TAGS. Compiling TS_TAGS
+  // (which references `type_identifier`) against the JS grammar throws
+  // `Bad node name 'type_identifier'` and breaks `cv index` on any repo
+  // containing a .js file. This exercises the JS query path end-to-end.
+  it("extracts classes, functions, methods without a query-compile throw", async () => {
+    const src = `
+class Greeter {
+  greet(name) {
+    return format(name);
+  }
+}
+
+function format(name) {
+  return "hi " + name;
+}
+
+const shout = (s) => format(s).toUpperCase();
+`;
+    const parsed = await parseFile(mkFile("greet.js", src));
+    expect(parsed.language).toBe("javascript");
+    expect(parsed.degraded).toBe(false);
+
+    const names = parsed.symbols.map((s) => s.name);
+    expect(names).toContain("Greeter");
+    expect(names).toContain("greet");
+    expect(names).toContain("format");
+    expect(names).toContain("shout");
+
+    const callNames = parsed.refs.filter((r) => r.kind === "calls").map((r) => r.name);
+    expect(callNames).toContain("format");
+  });
+});
+
 describe("parseFile — degraded", () => {
   it("degrades unsupported languages to whole-file chunk", async () => {
     const parsed = await parseFile(mkFile("data.xyz", "some content\nhere\n"));
