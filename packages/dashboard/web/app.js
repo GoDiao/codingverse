@@ -115,6 +115,50 @@ function renderTreemap(tokenMap) {
     });
 }
 
+// Board ⑥ — sync status: last index() duration + parse-cache hit/miss + the
+// changed (re-parsed) files. Data from /api/sync (persisted SyncState).
+function renderSync(state) {
+  const el = $("sync");
+  if (!state) {
+    el.innerHTML = `<p class="muted">No index yet. Run <code>cv index</code>.</p>`;
+    return;
+  }
+  const total = state.parseCacheHits + state.parseCacheMisses || 1;
+  const hitPct = ((state.parseCacheHits / total) * 100).toFixed(0);
+  const missPct = ((state.parseCacheMisses / total) * 100).toFixed(0);
+
+  const cards = [
+    ["duration", `${state.durationMs} ms`],
+    ["files", state.filesProcessed],
+    ["cache hits", state.parseCacheHits],
+    ["re-parsed", state.parseCacheMisses],
+    ["last run", formatTimestamp(state.timestamp)],
+  ];
+  const cardHtml = cards
+    .map(
+      ([label, value]) =>
+        `<div class="card"><div class="card-value">${value}</div><div class="card-label">${label}</div></div>`,
+    )
+    .join("");
+
+  const bar =
+    `<div class="cache-bar" title="cache hit/miss ratio">` +
+    `<span class="cache-hit" style="width:${hitPct}%"></span>` +
+    `<span class="cache-miss" style="width:${missPct}%"></span>` +
+    `</div><div class="cache-legend">` +
+    `<span class="badge badge-ok">cached ${state.parseCacheHits} (${hitPct}%)</span> ` +
+    `<span class="badge badge-degraded">re-parsed ${state.parseCacheMisses} (${missPct}%)</span></div>`;
+
+  const files = state.changedFiles ?? [];
+  const fileList = files.length
+    ? `<h3>Changed files (${files.length})</h3><ul class="file-list">` +
+      files.map((p) => `<li>${p}</li>`).join("") +
+      `</ul>`
+    : `<p class="muted">No files changed since the previous index.</p>`;
+
+  el.innerHTML = `<div class="cards">${cardHtml}</div>${bar}${fileList}`;
+}
+
 async function main() {
   try {
     const res = await fetch("/api/stats");
@@ -128,6 +172,9 @@ async function main() {
     renderHealth(stats.health);
     renderLanguages(stats.languages);
     renderTreemap(stats.tokenMap);
+
+    const syncRes = await fetch("/api/sync");
+    if (syncRes.ok) renderSync(await syncRes.json());
   } catch (err) {
     showError(err instanceof Error ? err.message : String(err));
   }

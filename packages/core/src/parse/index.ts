@@ -105,8 +105,9 @@ export const parseFiles = async (files: FileEntry[]): Promise<ParsedFile[]> => {
 export const parseFilesCached = async (
   files: FileEntry[],
   cache: ParseCache,
-): Promise<{ parsed: ParsedFile[]; stats: ParseCacheStats }> => {
+): Promise<{ parsed: ParsedFile[]; stats: ParseCacheStats; changedPaths: string[] }> => {
   const out: ParsedFile[] = [];
+  const changedPaths: string[] = [];
   let hits = 0;
   for (const file of files) {
     const cached = cache.get(file.path, file.content);
@@ -118,12 +119,14 @@ export const parseFilesCached = async (
     const parsed = await parseFile(file);
     cache.set(file.path, file.content, parsed);
     out.push(parsed);
+    changedPaths.push(file.path);
   }
   // GC entries for files no longer present.
   cache.prune(new Set(files.map((f) => f.path)));
   return {
     parsed: out,
     stats: { hits, misses: files.length - hits, total: files.length },
+    changedPaths,
   };
 };
 

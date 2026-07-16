@@ -113,6 +113,13 @@ export function createHandler(engine: Engine, repoPath: string) {
           sendJson(res, 200, stats.tokenMap);
           return;
         }
+        if (path === "/api/sync") {
+          // Board ⑥: full runtime sync state from the last index() run.
+          // Null when the repo was never indexed → 200 with null body so the
+          // frontend can render an "index first" empty state.
+          sendJson(res, 200, await engine.syncState());
+          return;
+        }
         sendJson(res, 404, { error: "unknown endpoint" });
         return;
       }

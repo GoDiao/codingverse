@@ -13,6 +13,7 @@ import type {
   TreemapNode,
   ExpandEntry,
   ParseStatus,
+  SyncState,
 } from "@codingverse/shared";
 import fs from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
@@ -206,7 +207,7 @@ export class Engine {
 
     const cache = new ParseCache(this.repoPath);
     await cache.load();
-    const { parsed, stats } = await parseFilesCached(ingested, cache);
+    const { parsed, stats, changedPaths } = await parseFilesCached(ingested, cache);
     await cache.save();
     this.lastCacheStats = stats;
 
@@ -233,16 +234,52 @@ export class Engine {
     const resolver = new RefResolver(db);
     const resolveStats = resolver.resolveAll();
 
+    const durationMs = Date.now() - start;
+
+    // v2.5-V4: persist the run's sync state into `meta` so a separate
+    // `cv serve` process (which never runs index() itself) can surface
+    // board ⑥. changedFiles is capped to keep the meta row bounded on
+    // large first-time indexes; parseCacheMisses still reports the true count.
+    const syncState: SyncState = {
+      timestamp: Date.now(),
+      durationMs,
+      filesProcessed: stats.total,
+      parseCacheHits: stats.hits,
+      parseCacheMisses: stats.misses,
+      changedFiles: changedPaths.slice(0, 200),
+    };
+    db.db
+      .prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)")
+      .run("sync_state", JSON.stringify(syncState));
+
     return {
       filesProcessed: stats.total,
       filesSkipped: stats.hits,
       symbols: storeStats.nodes,
       edges: resolveStats.resolved,
       chunks: storeStats.chunks,
-      durationMs: Date.now() - start,
+      durationMs,
       scipEdgesBefore,
       rankedNodesBefore,
     };
+  }
+
+  /**
+   * v2.5-V4: the persisted SyncState from the last index() run (board ⑥),
+   * or null if the repo was never indexed. Read from the `meta` table so it
+   * survives across processes — `cv serve` shows the last `cv index`'s stats.
+   */
+  async syncState(): Promise<SyncState | null> {
+    const db = this.ensureIndexDb();
+    const row = db.db
+      .prepare("SELECT value FROM meta WHERE key = ?")
+      .get("sync_state") as { value: string } | undefined;
+    if (!row) return null;
+    try {
+      return JSON.parse(row.value) as SyncState;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -678,7 +715,24 @@ export class Engine {
     }));
     const tokenMap = buildTokenTreemap(fileTokenCounts);
 
+    // v2.5-V4: populate syncQueue from the persisted SyncState — the
+    // changed (re-parsed) files from the last index() run, marked "parsed".
+    // Board ⑥ shows the full state via /api/sync (syncState()); syncQueue is
+    // the compact changed-file list carried inside DashboardStats.
     const syncQueue: { path: string; status: string }[] = [];
+    const syncRow = d
+      .prepare("SELECT value FROM meta WHERE key = ?")
+      .get("sync_state") as { value: string } | undefined;
+    if (syncRow) {
+      try {
+        const state = JSON.parse(syncRow.value) as SyncState;
+        for (const path of state.changedFiles) {
+          syncQueue.push({ path, status: "parsed" });
+        }
+      } catch {
+        // malformed meta row — leave syncQueue empty
+      }
+    }
 
     return {
       index: { files, symbols, edges, chunks, dbSize, lastSync },

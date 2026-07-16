@@ -163,3 +163,49 @@ h3 {
   margin-bottom: 24px;
   font-size: 14px;
 }
+
+/* Board ⑥ sync status */
+.muted {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.cache-bar {
+  display: flex;
+  width: 100%;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  margin: 16px 0 8px;
+  background: #0b1a2b;
+}
+
+.cache-hit {
+  background: var(--ok);
+}
+
+.cache-miss {
+  background: var(--degraded);
+}
+
+.cache-legend {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.file-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  max-height: 240px;
+  overflow-y: auto;
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+  font-size: 12px;
+}
+
+.file-list li {
+  padding: 3px 8px;
+  border-bottom: 1px solid #0b1a2b;
+  color: var(--text);
+}

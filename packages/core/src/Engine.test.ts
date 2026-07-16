@@ -763,12 +763,51 @@ describe("Engine.stats — Dashboard data source (v2.5)", () => {
     await engine.close();
   });
 
-  it("syncQueue is empty (V2.5-4 fills runtime state)", async () => {
+  it("syncQueue lists the changed (re-parsed) files after a first index()", async () => {
     const engine = await Engine.open(dir);
     await engine.index();
     const stats = await engine.stats();
-    expect(stats.syncQueue).toEqual([]);
+    // First index() is an all-miss run, so every ingested file was parsed
+    // and appears in syncQueue marked "parsed".
+    expect(stats.syncQueue.length).toBeGreaterThan(0);
+    for (const item of stats.syncQueue) {
+      expect(item.status).toBe("parsed");
+      expect(typeof item.path).toBe("string");
+    }
     await engine.close();
+  });
+
+  it("syncState() persists across processes via the meta table", async () => {
+    const e1 = await Engine.open(dir);
+    await e1.index();
+    await e1.close();
+
+    // A fresh engine (new process would be the same) reads the persisted state.
+    const e2 = await Engine.open(dir);
+    const state = await e2.syncState();
+    expect(state).not.toBeNull();
+    expect(state!.filesProcessed).toBeGreaterThan(0);
+    expect(state!.parseCacheMisses).toBeGreaterThan(0);
+    expect(state!.durationMs).toBeGreaterThanOrEqual(0);
+    expect(state!.timestamp).toBeGreaterThan(0);
+    expect(Array.isArray(state!.changedFiles)).toBe(true);
+    await e2.close();
+  });
+
+  it("second index() is all-hits: syncState reports 0 misses, empty changedFiles", async () => {
+    const e1 = await Engine.open(dir);
+    await e1.index();
+    await e1.close();
+
+    const e2 = await Engine.open(dir);
+    await e2.index();
+    const state = await e2.syncState();
+    expect(state!.parseCacheMisses).toBe(0);
+    expect(state!.parseCacheHits).toBeGreaterThan(0);
+    expect(state!.changedFiles).toEqual([]);
+    const stats = await e2.stats();
+    expect(stats.syncQueue).toEqual([]);
+    await e2.close();
   });
 
   it("returns zeros/empty on a fresh engine with no index() (no throw)", async () => {

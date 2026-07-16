@@ -327,3 +327,25 @@ export interface DashboardStats {
   tokenMap: TreemapNode;
   syncQueue: { path: string; status: string }[];
 }
+
+/**
+ * v2.5-V4: runtime state of the last `index()` run, persisted to the `meta`
+ * table so a fresh `cv serve` process (which never runs index() itself) can
+ * still surface board ⑥ (sync status). `changedFiles` are the cache-miss
+ * paths that were actually re-parsed this run; hits were served from the
+ * incremental parse cache. Null/absent until the repo has been indexed once.
+ */
+export interface SyncState {
+  /** Epoch-ms when the index() run finished. */
+  timestamp: number;
+  /** Wall-clock duration of the index() run. */
+  durationMs: number;
+  /** Total files seen this run (hits + misses). */
+  filesProcessed: number;
+  /** Files served from the incremental parse cache (unchanged). */
+  parseCacheHits: number;
+  /** Files re-parsed this run (new or changed content). */
+  parseCacheMisses: number;
+  /** The cache-miss paths that were re-parsed this run. */
+  changedFiles: string[];
+}
