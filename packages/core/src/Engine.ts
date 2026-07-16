@@ -14,6 +14,7 @@ import type {
   ExpandEntry,
   ParseStatus,
   SyncState,
+  GraphData,
 } from "@codingverse/shared";
 import fs from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
@@ -537,6 +538,82 @@ export class Engine {
       qualifiedName: r.qualified_name ?? undefined,
       name: r.name,
     }));
+  }
+
+  /**
+   * v2.5-V5: graph data for Dashboard board ③ (code graph). Returns the top
+   * `limit` nodes by pagerank plus the edges among ONLY those nodes (so the
+   * frontend never gets a dangling edge referencing an off-screen node). The
+   * cap keeps a big repo's graph from freezing the browser; `truncated` tells
+   * the UI the full graph is larger than what's shown. `maxPagerank` drives
+   * the node color/size scale. limit is clamped to >=1.
+   */
+  async graphData(limit = 200): Promise<GraphData> {
+    const db = this.ensureIndexDb();
+    const d = db.db;
+    const cap = Math.max(1, limit);
+
+    const totalNodes =
+      (d.prepare("SELECT COUNT(*) AS n FROM nodes").get() as
+        | { n: number }
+        | undefined)?.n ?? 0;
+
+    const nodeRows = d
+      .prepare(
+        `SELECT id, name, qualified_name, file_path, kind, pagerank
+         FROM nodes
+         ORDER BY pagerank DESC, id ASC
+         LIMIT ?`,
+      )
+      .all(cap) as Array<{
+      id: string;
+      name: string;
+      qualified_name: string | null;
+      file_path: string;
+      kind: string | null;
+      pagerank: number | null;
+    }>;
+
+    const nodes = nodeRows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      qualifiedName: r.qualified_name ?? undefined,
+      filePath: r.file_path,
+      kind: r.kind ?? "",
+      pagerank: r.pagerank ?? 0,
+    }));
+
+    const ids = new Set(nodes.map((n) => n.id));
+    let maxPagerank = 0;
+    for (const n of nodes) if (n.pagerank > maxPagerank) maxPagerank = n.pagerank;
+
+    // Edges among the selected nodes only. Pull all edges whose source is in
+    // the set (via a dynamic IN-list, same pattern as graph.ts), then filter
+    // to those whose target is also selected — avoids a huge cross-product and
+    // any dangling edge into an off-screen node.
+    const edges: { source: string; target: string; kind: string }[] = [];
+    if (ids.size > 0) {
+      const idList = [...ids];
+      const placeholders = idList.map(() => "?").join(",");
+      const edgeRows = d
+        .prepare(
+          `SELECT source, target, kind FROM edges WHERE source IN (${placeholders})`,
+        )
+        .all(...idList) as Array<{ source: string; target: string; kind: string }>;
+      for (const e of edgeRows) {
+        if (ids.has(e.target)) {
+          edges.push({ source: e.source, target: e.target, kind: e.kind });
+        }
+      }
+    }
+
+    return {
+      nodes,
+      edges,
+      maxPagerank,
+      totalNodes,
+      truncated: totalNodes > nodes.length,
+    };
   }
 
   /**

@@ -33,7 +33,15 @@
         <div id="sync"></div>
       </section>
 
-      <section class="board placeholder"><h2>③ Code graph</h2><p>coming in V2.5-5</p></section>
+      <section class="board" id="board-graph">
+        <h2>③ Code graph</h2>
+        <div class="graph-controls">
+          <span id="graph-meta" class="muted"></span>
+          <button id="graph-reset" type="button">clear highlight</button>
+        </div>
+        <div id="graph" class="graph"></div>
+        <div id="graph-detail" class="graph-detail muted">Click a node to highlight its callers (blue) and callees (orange).</div>
+      </section>
       <section class="board placeholder"><h2>④ Search inspector</h2><p>coming in V2.5-6</p></section>
       <section class="board placeholder"><h2>⑤ Pack preview</h2><p>coming in V2.5-7</p></section>
     </main>

@@ -329,6 +329,31 @@ export interface DashboardStats {
 }
 
 /**
+ * v2.5-V5: board ③ code-graph payload. A pagerank-ranked subset of the symbol
+ * graph — the top `limit` nodes by pagerank plus the edges that run BETWEEN
+ * those selected nodes (edges to un-selected nodes are dropped so the frontend
+ * never references a node id absent from `nodes`). `maxPagerank` drives the
+ * D3 heat color scale; `truncated` is true when the graph had more nodes than
+ * `limit`, so the UI can show "showing top N of M".
+ */
+export interface GraphNode {
+  id: string;
+  name: string;
+  qualifiedName?: string;
+  filePath: string;
+  kind: string;
+  pagerank: number;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: { source: string; target: string; kind: string }[];
+  maxPagerank: number;
+  totalNodes: number;
+  truncated: boolean;
+}
+
+/**
  * v2.5-V4: runtime state of the last `index()` run, persisted to the `meta`
  * table so a fresh `cv serve` process (which never runs index() itself) can
  * still surface board ⑥ (sync status). `changedFiles` are the cache-miss

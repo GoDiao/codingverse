@@ -159,6 +159,144 @@ function renderSync(state) {
   el.innerHTML = `<div class="cards">${cardHtml}</div>${bar}${fileList}`;
 }
 
+// Board ③ state: keep the simulation + selections so click-highlight can
+// recolor without a full re-render.
+const graphState = { node: null, link: null, byId: new Map() };
+
+function graphColor(pagerank, maxPagerank) {
+  const t = maxPagerank > 0 ? pagerank / maxPagerank : 0;
+  return d3.interpolateInferno(0.15 + t * 0.7);
+}
+
+function renderGraph(data) {
+  const el = $("graph");
+  el.innerHTML = "";
+  const width = el.clientWidth || 900;
+  const height = 520;
+
+  $("graph-meta").textContent =
+    `${data.nodes.length} nodes shown` +
+    (data.truncated ? ` of ${data.totalNodes} (top by PageRank)` : "") +
+    ` · ${data.edges.length} edges`;
+
+  const svg = d3
+    .select(el)
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height)
+    .attr("viewBox", `0 0 ${width} ${height}`);
+
+  // edges reference node objects by id; d3 mutates copies, so clone.
+  const nodes = data.nodes.map((n) => ({ ...n }));
+  const links = data.edges.map((e) => ({ ...e }));
+  graphState.byId = new Map(nodes.map((n) => [n.id, n]));
+  graphState.maxPagerank = data.maxPagerank;
+
+  const sim = d3
+    .forceSimulation(nodes)
+    .force(
+      "link",
+      d3.forceLink(links).id((d) => d.id).distance(40).strength(0.4),
+    )
+    .force("charge", d3.forceManyBody().strength(-60))
+    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("collide", d3.forceCollide().radius(6));
+
+  const link = svg
+    .append("g")
+    .attr("stroke", "#2b4d6f")
+    .attr("stroke-opacity", 0.5)
+    .selectAll("line")
+    .data(links)
+    .join("line")
+    .attr("stroke-width", 1);
+
+  const rScale = d3
+    .scaleSqrt()
+    .domain([0, data.maxPagerank || 1])
+    .range([3, 14]);
+
+  const node = svg
+    .append("g")
+    .attr("stroke", "#0b1a2b")
+    .attr("stroke-width", 1)
+    .selectAll("circle")
+    .data(nodes)
+    .join("circle")
+    .attr("r", (d) => rScale(d.pagerank))
+    .attr("fill", (d) => graphColor(d.pagerank, data.maxPagerank))
+    .style("cursor", "pointer")
+    .on("click", (_event, d) => highlightNode(d));
+
+  node.append("title").text(
+    (d) =>
+      `${d.qualifiedName || d.name}\n${d.filePath}\n${d.kind} · pagerank=${d.pagerank.toFixed(5)}`,
+  );
+
+  graphState.node = node;
+  graphState.link = link;
+  graphState.maxPagerank = data.maxPagerank;
+
+  sim.on("tick", () => {
+    link
+      .attr("x1", (d) => d.source.x)
+      .attr("y1", (d) => d.source.y)
+      .attr("x2", (d) => d.target.x)
+      .attr("y2", (d) => d.target.y);
+    node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+  });
+}
+
+async function highlightNode(d) {
+  try {
+    const [callersRes, calleesRes] = await Promise.all([
+      fetch(`/api/callers?id=${encodeURIComponent(d.id)}&depth=2`),
+      fetch(`/api/callees?id=${encodeURIComponent(d.id)}&depth=2`),
+    ]);
+    const callers = callersRes.ok ? await callersRes.json() : { nodes: [] };
+    const callees = calleesRes.ok ? await calleesRes.json() : { nodes: [] };
+    const callerSet = new Set(callers.nodes);
+    const calleeSet = new Set(callees.nodes);
+
+    graphState.node.attr("fill", (n) => {
+      if (n.id === d.id) return "#fff";
+      if (callerSet.has(n.id)) return "#4a9eff"; // callers = blue
+      if (calleeSet.has(n.id)) return "#f5a623"; // callees = orange
+      return "#233a52"; // dimmed
+    });
+    graphState.node.attr("opacity", (n) =>
+      n.id === d.id || callerSet.has(n.id) || calleeSet.has(n.id) ? 1 : 0.25,
+    );
+
+    $("graph-detail").textContent =
+      `${d.qualifiedName || d.name} (${d.filePath}) — ` +
+      `${callerSet.size} callers (blue), ${calleeSet.size} callees (orange)`;
+  } catch (err) {
+    $("graph-detail").textContent = err instanceof Error ? err.message : String(err);
+  }
+}
+
+function resetHighlight() {
+  if (!graphState.node) return;
+  graphState.node
+    .attr("fill", (n) => graphColor(n.pagerank, graphState.maxPagerank))
+    .attr("opacity", 1);
+  $("graph-detail").textContent =
+    "Click a node to highlight its callers (blue) and callees (orange).";
+}
+
+async function loadGraph() {
+  try {
+    const res = await fetch("/api/graph?limit=200");
+    if (!res.ok) return;
+    renderGraph(await res.json());
+    const resetBtn = $("graph-reset");
+    if (resetBtn) resetBtn.onclick = resetHighlight;
+  } catch {
+    /* board ③ is best-effort */
+  }
+}
+
 async function main() {
   try {
     const res = await fetch("/api/stats");
@@ -175,6 +313,8 @@ async function main() {
 
     const syncRes = await fetch("/api/sync");
     if (syncRes.ok) renderSync(await syncRes.json());
+
+    await loadGraph();
   } catch (err) {
     showError(err instanceof Error ? err.message : String(err));
   }

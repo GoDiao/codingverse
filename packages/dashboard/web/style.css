@@ -209,3 +209,25 @@ h3 {
   border-bottom: 1px solid #0b1a2b;
   color: var(--text);
 }
+
+/* Board ③ code graph */
+#graph {
+  width: 100%;
+  min-height: 520px;
+  background: #0b1a2b;
+  border-radius: 6px;
+}
+
+.graph-meta {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+.graph-detail {
+  color: var(--text);
+  font-size: 13px;
+  margin-top: 8px;
+  min-height: 18px;
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+}

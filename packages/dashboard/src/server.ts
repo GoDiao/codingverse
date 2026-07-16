@@ -120,6 +120,33 @@ export function createHandler(engine: Engine, repoPath: string) {
           sendJson(res, 200, await engine.syncState());
           return;
         }
+        if (path === "/api/graph") {
+          // Board ③: top-N nodes by pagerank + edges among them.
+          const limit = Number(url.searchParams.get("limit")) || 200;
+          sendJson(res, 200, await engine.graphData(limit));
+          return;
+        }
+        if (path === "/api/callers" || path === "/api/callees") {
+          // Board ③ click-highlight: callers/callees of a node id. Missing id
+          // → 400; unknown id → Engine throws, caught below as 500.
+          const id = url.searchParams.get("id");
+          if (!id) {
+            sendJson(res, 400, { error: "missing id" });
+            return;
+          }
+          const depth = Number(url.searchParams.get("depth")) || 1;
+          const graph =
+            path === "/api/callers"
+              ? await engine.callersGraph(id, depth)
+              : await engine.calleesGraph(id, depth);
+          // Only the neighbor ids + edges are needed to highlight; return the
+          // ids and edges (frontend already has node metadata from /api/graph).
+          sendJson(res, 200, {
+            nodes: graph.nodes.map((n) => n.id),
+            edges: graph.edges.map((e) => ({ source: e.source, target: e.target })),
+          });
+          return;
+        }
         sendJson(res, 404, { error: "unknown endpoint" });
         return;
       }
