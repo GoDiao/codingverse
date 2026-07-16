@@ -9,7 +9,12 @@ export {
   type ScipImportOptions,
   type ScipImportStats,
 } from "./scip.js";
-export { SearchEngine, type SearchParams, type SearchRow } from "./search.js";
+export {
+  SearchEngine,
+  type SearchParams,
+  type SearchRow,
+  type SearchDebugResult,
+} from "./search.js";
 export { CallGraph, type GraphResult } from "./graph.js";
 export { PageRank, type RankOptions, type RankStats } from "./rank.js";
 export { symbolId, chunkId, qualifiedName } from "./ids.js";

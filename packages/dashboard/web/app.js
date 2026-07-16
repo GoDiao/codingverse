@@ -297,6 +297,63 @@ async function loadGraph() {
   }
 }
 
+// Board ④: render one path's hit list. `cols` maps a hit to its display cells.
+function renderHitList(elId, hits, kind) {
+  const el = $(elId);
+  if (!hits.length) {
+    el.innerHTML = `<p class="muted">no hits</p>`;
+    return;
+  }
+  const short = (p) => p.split("/").pop();
+  el.innerHTML = hits
+    .map((h) => {
+      let badge = "";
+      if (kind === "bm25") badge = `bm25=${h.score.toFixed(3)}`;
+      else if (kind === "graph") badge = `Δ${h.proximity} lines`;
+      else badge = `rrf=${h.rrf.toFixed(4)} · b#${h.bm25Rank || "-"} g#${h.graphRank || "-"}`;
+      return (
+        `<div class="hit" title="${h.filePath}:${h.startLine}">` +
+        `<span class="hit-rank">${h.rank ?? ""}</span>` +
+        `<span class="hit-path">${short(h.filePath)}:${h.startLine}</span>` +
+        `<span class="hit-score">${badge}</span></div>`
+      );
+    })
+    .join("");
+}
+
+async function runSearch() {
+  const query = $("search-input").value.trim();
+  if (query.length < 2) return;
+  $("search-meta").textContent = "searching…";
+  try {
+    const res = await fetch(`/api/search-debug?query=${encodeURIComponent(query)}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      $("search-meta").textContent = body.hint || body.error || `HTTP ${res.status}`;
+      return;
+    }
+    const d = await res.json();
+    renderHitList("search-bm25", d.bm25, "bm25");
+    renderHitList("search-graph", d.graph, "graph");
+    renderHitList("search-fused", d.fused, "fused");
+    $("search-meta").textContent =
+      `"${d.ftsQuery}" · ${d.bm25.length} bm25 / ${d.graph.length} co-location → ` +
+      `top ${d.fused.length} fused (RRF k=${d.rrfK})`;
+  } catch (err) {
+    $("search-meta").textContent = err instanceof Error ? err.message : String(err);
+  }
+}
+
+function wireSearch() {
+  const btn = $("search-run");
+  const input = $("search-input");
+  if (btn) btn.onclick = runSearch;
+  if (input)
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") runSearch();
+    });
+}
+
 async function main() {
   try {
     const res = await fetch("/api/stats");
@@ -315,6 +372,7 @@ async function main() {
     if (syncRes.ok) renderSync(await syncRes.json());
 
     await loadGraph();
+    wireSearch();
   } catch (err) {
     showError(err instanceof Error ? err.message : String(err));
   }

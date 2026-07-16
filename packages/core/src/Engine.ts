@@ -38,6 +38,7 @@ import type {
   RankOptions,
   RankStats,
   GraphResult,
+  SearchDebugResult,
   ScipImportOptions,
   ScipImportStats,
 } from "./indexdb/index.js";
@@ -412,6 +413,23 @@ export class Engine {
       },
       relatedNodes: row.relatedNodes,
     }));
+  }
+
+  /**
+   * v2.5-V6: search inspector data for Dashboard board ④. Returns each
+   * retrieval path (BM25 / co-location) independently plus the fused top-k
+   * with per-path ranks and the RRF constants, so the UI can show how the
+   * paths combine. Thin pass-through to SearchEngine.searchDebug (which
+   * reuses the same recall() as search(), so the debug view can't drift from
+   * real results).
+   */
+  async searchDebug(
+    query: string,
+    opts: SearchOptions = {},
+  ): Promise<SearchDebugResult> {
+    const db = this.ensureIndexDb();
+    const engine = new SearchEngine(db);
+    return engine.searchDebug({ query, topK: opts.topK ?? 20 });
   }
 
   /**

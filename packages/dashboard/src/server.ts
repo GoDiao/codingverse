@@ -120,6 +120,15 @@ export function createHandler(engine: Engine, repoPath: string) {
           sendJson(res, 200, await engine.syncState());
           return;
         }
+        if (path === "/api/search-debug") {
+          // Board ④: per-path (BM25 / co-location) + fused breakdown for a
+          // query. Missing/short query → empty result from searchDebug (no
+          // throw). topK optional (default 20).
+          const query = url.searchParams.get("query") ?? "";
+          const topK = Number(url.searchParams.get("topK")) || 20;
+          sendJson(res, 200, await engine.searchDebug(query, { topK }));
+          return;
+        }
         if (path === "/api/graph") {
           // Board ③: top-N nodes by pagerank + edges among them.
           const limit = Number(url.searchParams.get("limit")) || 200;

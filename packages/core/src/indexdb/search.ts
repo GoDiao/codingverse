@@ -54,6 +54,60 @@ export interface SearchRow {
   relatedNodes: string[];
 }
 
+/**
+ * v2.5-V6: per-path breakdown for Dashboard board ④ (search inspector).
+ * Exposes the intermediate BM25 / co-location / fused results that `search()`
+ * computes internally, so the UI can show each retrieval path independently
+ * and how RRF combined them. `search()` is unchanged — both share recall().
+ */
+export interface SearchDebugResult {
+  query: string;
+  /** FTS5 MATCH string after CamelCase/tokenization (what actually ran). */
+  ftsQuery: string;
+  /** BM25 path hits, in BM25 rank order. score = negated bm25() (higher=better). */
+  bm25: Array<{
+    chunkId: string;
+    filePath: string;
+    startLine: number;
+    score: number;
+    rank: number;
+  }>;
+  /** Co-location path hits, in proximity order. proximity = line distance to nearest seed. */
+  graph: Array<{
+    chunkId: string;
+    filePath: string;
+    startLine: number;
+    proximity: number;
+    rank: number;
+  }>;
+  /** Fused top-k, with each path's contributing rank (0 = absent from that path). */
+  fused: Array<{
+    chunkId: string;
+    filePath: string;
+    startLine: number;
+    rrf: number;
+    bm25Rank: number;
+    graphRank: number;
+  }>;
+  rrfK: number;
+  weights: { bm25: number; graph: number };
+}
+
+interface RecallResult {
+  ftsQuery: string;
+  bm25Rank: Map<string, number>;
+  bm25Score: Map<string, number>;
+  graphRank: Map<string, number>;
+  graphDistance: Map<string, number>;
+  chunkMeta: Map<
+    string,
+    { filePath: string; startLine: number; endLine: number; body: string }
+  >;
+  fused: Array<{ id: string; bm25: number; graph: number; rrf: number }>;
+  bm25Weight: number;
+  graphWeight: number;
+}
+
 interface Bm25Row {
   id: string;
   file_path: string;
@@ -109,8 +163,104 @@ export class SearchEngine {
   }
 
   search(params: SearchParams): SearchRow[] {
+    const recall = this.recall(params);
+    if (!recall) return [];
+    const { fused, chunkMeta } = recall;
+    const topK = params.topK ?? DEFAULT_TOP_K;
+
+    const top = fused.slice(0, topK);
+    const results: SearchRow[] = [];
+    for (const f of top) {
+      const meta = chunkMeta.get(f.id)!;
+      const nodeRows = this.relatedNodes.all(meta.filePath) as unknown as Array<{
+        id: string;
+      }>;
+      results.push({
+        chunkId: f.id,
+        filePath: meta.filePath,
+        startLine: meta.startLine,
+        endLine: meta.endLine,
+        body: meta.body,
+        scores: { bm25: f.bm25, graph: f.graph, rrf: f.rrf },
+        relatedNodes: nodeRows.map((r) => r.id),
+      });
+    }
+    return results;
+  }
+
+  /**
+   * v2.5-V6: run the same recall as search() but return each path's
+   * independent hits + the fused top-k with per-path ranks, for board ④.
+   * Empty query / no BM25 hits → all-empty result (never throws).
+   */
+  searchDebug(params: SearchParams): SearchDebugResult {
+    const topK = params.topK ?? DEFAULT_TOP_K;
+    const bm25Weight = params.bm25Weight ?? DEFAULT_WEIGHT;
+    const graphWeight = params.graphWeight ?? DEFAULT_WEIGHT;
+    const empty: SearchDebugResult = {
+      query: params.query ?? "",
+      ftsQuery: "",
+      bm25: [],
+      graph: [],
+      fused: [],
+      rrfK: RRF_K,
+      weights: { bm25: bm25Weight, graph: graphWeight },
+    };
+
+    const recall = this.recall(params);
+    if (!recall) return empty;
+    const { ftsQuery, bm25Rank, graphRank, graphDistance, chunkMeta, fused } = recall;
+
+    const meta = (id: string) => chunkMeta.get(id)!;
+
+    const bm25 = [...bm25Rank.entries()]
+      .sort((a, b) => a[1] - b[1])
+      .map(([id, rank]) => ({
+        chunkId: id,
+        filePath: meta(id).filePath,
+        startLine: meta(id).startLine,
+        score: recall.bm25Score.get(id) ?? 0,
+        rank,
+      }));
+
+    const graph = [...graphRank.entries()]
+      .sort((a, b) => a[1] - b[1])
+      .map(([id, rank]) => ({
+        chunkId: id,
+        filePath: meta(id).filePath,
+        startLine: meta(id).startLine,
+        proximity: graphDistance.get(id) ?? 0,
+        rank,
+      }));
+
+    const fusedOut = fused.slice(0, topK).map((f) => ({
+      chunkId: f.id,
+      filePath: meta(f.id).filePath,
+      startLine: meta(f.id).startLine,
+      rrf: f.rrf,
+      bm25Rank: bm25Rank.get(f.id) ?? 0,
+      graphRank: graphRank.get(f.id) ?? 0,
+    }));
+
+    return {
+      query: params.query ?? "",
+      ftsQuery,
+      bm25,
+      graph,
+      fused: fusedOut,
+      rrfK: RRF_K,
+      weights: { bm25: recall.bm25Weight, graph: recall.graphWeight },
+    };
+  }
+
+  /**
+   * Shared recall + fusion. Returns null on empty query / no BM25 hits.
+   * Both search() and searchDebug() consume this so the ranking logic lives
+   * in exactly one place (no behavior drift between the two entry points).
+   */
+  private recall(params: SearchParams): RecallResult | null {
     const query = (params.query ?? "").trim();
-    if (query.length < 2) return [];
+    if (query.length < 2) return null;
 
     const topK = params.topK ?? DEFAULT_TOP_K;
     const bm25Weight = params.bm25Weight ?? DEFAULT_WEIGHT;
@@ -118,11 +268,11 @@ export class SearchEngine {
     const graphDepth = Math.min(params.graphDepth ?? 1, 1);
 
     const ftsQuery = tokenizeQuery(query);
-    if (ftsQuery.length === 0) return [];
+    if (ftsQuery.length === 0) return null;
 
     const seedLimit = Math.min(topK * 3, SEED_CAP);
     const bm25Rows = this.bm25Search.all(ftsQuery, seedLimit) as unknown as Bm25Row[];
-    if (bm25Rows.length === 0) return [];
+    if (bm25Rows.length === 0) return null;
 
     const bm25Rank = new Map<string, number>();
     const bm25Score = new Map<string, number>();
@@ -143,6 +293,7 @@ export class SearchEngine {
     }
 
     const graphRank = new Map<string, number>();
+    const graphDistance = new Map<string, number>();
     if (graphDepth >= 1) {
       const seedsByFile = new Map<string, Array<{ id: string; startLine: number }>>();
       for (const r of bm25Rows) {
@@ -182,6 +333,7 @@ export class SearchEngine {
       for (let i = 0; i < graphCandidates.length; i++) {
         const g = graphCandidates[i]!;
         graphRank.set(g.id, i + 1);
+        graphDistance.set(g.id, g.distance);
         if (!chunkMeta.has(g.id)) {
           chunkMeta.set(g.id, {
             filePath: g.filePath,
@@ -210,24 +362,17 @@ export class SearchEngine {
 
     fused.sort((a, b) => b.rrf - a.rrf);
 
-    const top = fused.slice(0, topK);
-    const results: SearchRow[] = [];
-    for (const f of top) {
-      const meta = chunkMeta.get(f.id)!;
-      const nodeRows = this.relatedNodes.all(meta.filePath) as unknown as Array<{
-        id: string;
-      }>;
-      results.push({
-        chunkId: f.id,
-        filePath: meta.filePath,
-        startLine: meta.startLine,
-        endLine: meta.endLine,
-        body: meta.body,
-        scores: { bm25: f.bm25, graph: f.graph, rrf: f.rrf },
-        relatedNodes: nodeRows.map((r) => r.id),
-      });
-    }
-    return results;
+    return {
+      ftsQuery,
+      bm25Rank,
+      bm25Score,
+      graphRank,
+      graphDistance,
+      chunkMeta,
+      fused,
+      bm25Weight,
+      graphWeight,
+    };
   }
 }
 

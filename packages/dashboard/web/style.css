@@ -231,3 +231,91 @@ h3 {
   min-height: 18px;
   font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
 }
+
+/* Board ④ search inspector */
+.search-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.search-controls input {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  background: #0b1a2b;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.search-controls button,
+.graph-controls button {
+  padding: 8px 14px;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.search-controls button:hover,
+.graph-controls button:hover {
+  filter: brightness(1.1);
+}
+
+.search-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.search-col h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.hit-list {
+  max-height: 320px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.hit {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px;
+  border-bottom: 1px solid #0b1a2b;
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+}
+
+.hit-rank {
+  color: var(--muted);
+  min-width: 20px;
+  text-align: right;
+}
+
+.hit-path {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.hit-score {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .search-cols {
+    grid-template-columns: 1fr;
+  }
+}

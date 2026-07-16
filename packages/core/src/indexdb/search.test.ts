@@ -329,3 +329,53 @@ export function helperFunc() {
     db.close();
   });
 });
+
+describe("SearchEngine.searchDebug — board ④ per-path breakdown (v2.5-V6)", () => {
+  it("returns bm25 / graph / fused paths that agree with search()", async () => {
+    const src = `export class TokenBudget {
+  /** Token budget for the model. */
+  tokens: number;
+  budget: number;
+}
+`;
+    const { db, engine } = await seed([{ path: "budget.ts", content: src }]);
+
+    const debug = engine.searchDebug({ query: "token budget" });
+    expect(debug.query).toBe("token budget");
+    expect(debug.ftsQuery.length).toBeGreaterThan(0);
+    expect(debug.rrfK).toBe(60);
+    expect(debug.weights).toEqual({ bm25: 1, graph: 1 });
+
+    // BM25 path is non-empty and ranks are 1-indexed & contiguous.
+    expect(debug.bm25.length).toBeGreaterThan(0);
+    expect(debug.bm25[0]!.rank).toBe(1);
+    for (let i = 0; i < debug.bm25.length; i++) {
+      expect(debug.bm25[i]!.rank).toBe(i + 1);
+    }
+
+    // Fused top-k matches search()'s chunk ordering exactly.
+    const rows = engine.search({ query: "token budget" });
+    expect(debug.fused.map((f) => f.chunkId)).toEqual(rows.map((r) => r.chunkId));
+
+    // Each fused row's per-path ranks agree with the standalone path lists.
+    for (const f of debug.fused) {
+      const b = debug.bm25.find((x) => x.chunkId === f.chunkId);
+      expect(f.bm25Rank).toBe(b ? b.rank : 0);
+      const g = debug.graph.find((x) => x.chunkId === f.chunkId);
+      expect(f.graphRank).toBe(g ? g.rank : 0);
+    }
+    db.close();
+  });
+
+  it("returns all-empty (no throw) for an empty / too-short query", async () => {
+    const { db, engine } = await seed([
+      { path: "a.ts", content: "export function foo() { return 1; }\n" },
+    ]);
+    const debug = engine.searchDebug({ query: "" });
+    expect(debug.bm25).toEqual([]);
+    expect(debug.graph).toEqual([]);
+    expect(debug.fused).toEqual([]);
+    expect(debug.ftsQuery).toBe("");
+    db.close();
+  });
+});
