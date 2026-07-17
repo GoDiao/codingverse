@@ -374,3 +374,21 @@ export interface SyncState {
   /** The cache-miss paths that were re-parsed this run. */
   changedFiles: string[];
 }
+
+/**
+ * v2.5-V7: pack-preview payload for Dashboard board ⑤. Runs the pack pipeline
+ * at a given token budget + layer strategy but returns ONLY the layer decision
+ * summary — per-file layer + tokens, layer counts, totals — never the rendered
+ * content (which can be megabytes). `fits` is true when the packed total is at
+ * or under budget. The UI drives a budget slider against this to show how the
+ * layer mix (full/skeleton/outline/omit) shifts as the budget tightens.
+ */
+export interface PackPreview {
+  budget: number;
+  total: number;
+  fits: boolean;
+  strategy: string;
+  files: { path: string; layer: Layer; tokens: number }[];
+  layerCounts: Record<Layer, number>;
+  expandableCount: number;
+}

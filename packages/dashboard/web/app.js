@@ -354,6 +354,88 @@ function wireSearch() {
     });
 }
 
+// Board ⑤ — pack preview: budget bar + layer breakdown + per-file list.
+const LAYER_BADGE = { full: "ok", skeleton: "accent", outline: "degraded", omit: "skipped" };
+
+function renderPackPreview(data) {
+  const el = $("pack-result");
+  const usedPct = Math.min(100, (data.total / data.budget) * 100).toFixed(1);
+  const fits = data.total <= data.budget;
+
+  const bar =
+    `<div class="pack-bar-wrap">` +
+    `<div class="pack-bar"><span class="pack-used ${fits ? "pack-ok" : "pack-over"}" style="width:${usedPct}%"></span></div>` +
+    `<span class="pack-bar-label">${data.total.toLocaleString()} / ${data.budget.toLocaleString()} tok (${usedPct}%)</span>` +
+    (fits ? `` : `<span class="badge badge-failed">OVER BUDGET</span>`) +
+    `</div>`;
+
+  const cards = [
+    ["budget", data.budget.toLocaleString()],
+    ["total", data.total.toLocaleString()],
+    ["fits", fits ? "✓ yes" : "✗ no"],
+    ["strategy", data.strategy],
+    ["expandable", data.expandableCount],
+  ];
+  const cardHtml = cards
+    .map(([label, value]) =>
+      `<div class="card"><div class="card-value ${label === "fits" ? (fits ? "val-ok" : "val-fail") : ""}">${value}</div>` +
+      `<div class="card-label">${label}</div></div>`
+    ).join("");
+
+  const layers = ["full", "skeleton", "outline", "omit"];
+  const layerBadges = layers
+    .map((l) => `<span class="badge badge-${LAYER_BADGE[l]}">${l} ${data.layerCounts[l] ?? 0}</span>`)
+    .join("");
+
+  const sorted = [...data.files].sort((a, b) => b.tokens - a.tokens);
+  const fileRows = sorted
+    .map((f) =>
+      `<div class="pack-file">` +
+      `<span class="pack-file-layer layer-${f.layer}">${f.layer[0].toUpperCase()}</span>` +
+      `<span class="pack-file-path" title="${f.path}">${f.path}</span>` +
+      `<span class="pack-file-tok">${f.tokens.toLocaleString()}</span>` +
+      `</div>`
+    ).join("");
+
+  el.innerHTML =
+    bar +
+    `<div class="cards" style="margin:12px 0 8px">${cardHtml}</div>` +
+    `<div class="cache-legend">${layerBadges}</div>` +
+    `<h3>Files (${data.files.length}, sorted by tokens)</h3>` +
+    `<div class="pack-file-list">${fileRows}</div>`;
+}
+
+async function loadPackPreview(budget, strategy) {
+  $("pack-meta").textContent = "loading…";
+  try {
+    const params = new URLSearchParams({ budget: String(budget), strategy });
+    const res = await fetch(`/api/pack-preview?${params}`);
+    if (!res.ok) {
+      $("pack-meta").textContent = `HTTP ${res.status}`;
+      return;
+    }
+    renderPackPreview(await res.json());
+    $("pack-meta").textContent = "";
+  } catch (err) {
+    $("pack-meta").textContent = err instanceof Error ? err.message : String(err);
+  }
+}
+
+function wirePackPreview() {
+  const slider = $("pack-budget");
+  const valEl = $("pack-budget-val");
+  const stratEl = $("pack-strategy");
+  const btn = $("pack-run");
+  if (!slider || !btn) return;
+
+  const fmt = (v) => `${Number(v).toLocaleString()} tok`;
+  slider.addEventListener("input", () => { valEl.textContent = fmt(slider.value); });
+  btn.onclick = () => loadPackPreview(Number(slider.value), stratEl.value);
+
+  // Initial load with defaults
+  loadPackPreview(Number(slider.value), stratEl.value);
+}
+
 async function main() {
   try {
     const res = await fetch("/api/stats");
@@ -373,6 +455,7 @@ async function main() {
 
     await loadGraph();
     wireSearch();
+    wirePackPreview();
   } catch (err) {
     showError(err instanceof Error ? err.message : String(err));
   }

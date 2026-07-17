@@ -135,6 +135,29 @@ export function createHandler(engine: Engine, repoPath: string) {
           sendJson(res, 200, await engine.graphData(limit));
           return;
         }
+        if (path === "/api/pack-preview") {
+          // Board ⑤: run pack() but return only the layer/token summary (no
+          // content). budget + strategy drive layer selection; defaults match
+          // Engine.pack(). A big budget → mostly "full"; a small one forces
+          // skeleton/outline/omit downgrades.
+          const budgetParam = Number(url.searchParams.get("budget"));
+          const strategy = url.searchParams.get("strategy") ?? undefined;
+          const opts: {
+            tokenBudget?: number;
+            layerStrategy?: "auto" | "full" | "skeleton" | "outline";
+          } = {};
+          if (budgetParam > 0) opts.tokenBudget = budgetParam;
+          if (
+            strategy === "auto" ||
+            strategy === "full" ||
+            strategy === "skeleton" ||
+            strategy === "outline"
+          ) {
+            opts.layerStrategy = strategy;
+          }
+          sendJson(res, 200, await engine.packPreview(opts));
+          return;
+        }
         if (path === "/api/callers" || path === "/api/callees") {
           // Board ③ click-highlight: callers/callees of a node id. Missing id
           // → 400; unknown id → Engine throws, caught below as 500.

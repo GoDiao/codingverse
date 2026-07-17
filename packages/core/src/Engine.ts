@@ -15,6 +15,8 @@ import type {
   ParseStatus,
   SyncState,
   GraphData,
+  PackPreview,
+  Layer,
 } from "@codingverse/shared";
 import fs from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
@@ -381,6 +383,40 @@ export class Engine {
       fileCount: result.files.filter((f) => f.layer !== "omit").length,
       files: result.files,
       expandMap: result.expandMap,
+    };
+  }
+
+  /**
+   * v2.5-V7: pack-preview summary for Dashboard board ⑤. Runs the full pack()
+   * pipeline but returns ONLY the layer decisions + per-file tokens + counts,
+   * dropping the (potentially huge) rendered content so a budget slider can
+   * poll cheaply. `fits` is whether the total came in at/under the budget;
+   * layerCounts tallies files per layer for the summary badges.
+   */
+  async packPreview(opts: PackOptions = {}): Promise<PackPreview> {
+    const budget = opts.tokenBudget ?? DEFAULT_TOKEN_BUDGET;
+    const result = await this.pack(opts);
+
+    const layerCounts: Record<Layer, number> = {
+      full: 0,
+      skeleton: 0,
+      outline: 0,
+      omit: 0,
+    };
+    for (const f of result.files) layerCounts[f.layer]++;
+
+    return {
+      budget,
+      total: result.tokenCount,
+      fits: result.tokenCount <= budget,
+      strategy: opts.layerStrategy ?? "auto",
+      files: result.files.map((f) => ({
+        path: f.path,
+        layer: f.layer,
+        tokens: f.tokens,
+      })),
+      layerCounts,
+      expandableCount: Object.keys(result.expandMap).length,
     };
   }
 
