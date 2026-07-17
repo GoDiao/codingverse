@@ -94,7 +94,6 @@ export class PageRank {
   private readonly selectAllNodeIdsNames: StatementSync;
   private readonly selectAllCallEdges: StatementSync;
   private readonly selectOverheatedNames: StatementSync;
-  private readonly updatePagerank: StatementSync;
   private readonly clearPagerank: StatementSync;
   private readonly getPagerank: StatementSync;
   private readonly topNByPagerank: StatementSync;
@@ -110,7 +109,6 @@ export class PageRank {
     this.selectOverheatedNames = d.prepare(
       "SELECT name FROM nodes GROUP BY name HAVING COUNT(DISTINCT file_path) > ?",
     );
-    this.updatePagerank = d.prepare("UPDATE nodes SET pagerank = ? WHERE id = ?");
     this.clearPagerank = d.prepare("UPDATE nodes SET pagerank = 0");
     this.getPagerank = d.prepare("SELECT pagerank FROM nodes WHERE id = ?");
     this.topNByPagerank = d.prepare(
@@ -209,9 +207,7 @@ export class PageRank {
     this.db.db.exec("BEGIN");
     try {
       this.clearPagerank.run();
-      for (let i = 0; i < N; i++) {
-        this.updatePagerank.run(rank[i], nodeRows[i].id);
-      }
+      this.writebackRanks(nodeRows, rank);
       this.db.db.exec("COMMIT");
     } catch (e) {
       try {
@@ -229,6 +225,36 @@ export class PageRank {
       nodeCount: N,
       edgeCount: edges.length,
     };
+  }
+
+  /**
+   * v2.5-V8: batch pagerank writeback. Replaces N single-row UPDATEs with
+   * chunked `UPDATE nodes SET pagerank = CASE id WHEN ? THEN ? … END WHERE id
+   * IN (…)` statements — one native round-trip per CHUNK_SIZE nodes instead
+   * of one per node. Statements are re-prepared per chunk because node:sqlite
+   * has no variable-arity binding; the last (partial) chunk gets its own
+   * prepare. Bound param count per chunk = 2·k (CASE pairs) + k (IN list) =
+   * 3·k, well under SQLite's 32766 limit for k ≤ 500.
+   */
+  private writebackRanks(nodeRows: NodeIdNameRow[], rank: number[]): void {
+    const CHUNK_SIZE = 500;
+    const d = this.db.db;
+    for (let start = 0; start < nodeRows.length; start += CHUNK_SIZE) {
+      const end = Math.min(start + CHUNK_SIZE, nodeRows.length);
+      const k = end - start;
+      const casePairs = new Array<string>(k).fill("WHEN ? THEN ?").join(" ");
+      const inList = new Array<string>(k).fill("?").join(",");
+      const stmt = d.prepare(
+        `UPDATE nodes SET pagerank = CASE id ${casePairs} END WHERE id IN (${inList})`,
+      );
+      const caseArgs: unknown[] = [];
+      const idArgs: unknown[] = [];
+      for (let i = start; i < end; i++) {
+        caseArgs.push(nodeRows[i].id, rank[i]);
+        idArgs.push(nodeRows[i].id);
+      }
+      stmt.run(...(caseArgs as never[]), ...(idArgs as never[]));
+    }
   }
 
   /** Get a node's pagerank (0 if unranked or missing). */

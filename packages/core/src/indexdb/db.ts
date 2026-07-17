@@ -149,6 +149,24 @@ export class IndexDb {
     );
   }
 
+  /**
+   * v2.5-V8: prepare-and-memoize a fixed-SQL statement, keyed by the SQL
+   * string itself. Dashboard endpoints (stats / graphData / syncState) are
+   * polled repeatedly and previously re-prepared their queries on every call;
+   * this reuses the compiled statement across calls. node:sqlite rebinds
+   * params per run(), so a shared StatementSync is safe to reuse. Only for
+   * FIXED SQL — never pass a dynamically-built IN-list string (unbounded key
+   * cardinality would leak statements). Cleared in close() with the map.
+   */
+  prepareCached(sql: string): StatementSync {
+    let stmt = this.statements.get(sql);
+    if (!stmt) {
+      stmt = this.db.prepare(sql);
+      this.statements.set(sql, stmt);
+    }
+    return stmt;
+  }
+
   close(): void {
     this.statements.clear();
     this.db.close();

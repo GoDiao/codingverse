@@ -244,10 +244,19 @@ export class ScipImporter {
   private readonly countNodes: StatementSync;
   private readonly matchNodeByLine: StatementSync;
   private readonly matchNodeByNameInFile: StatementSync;
-  private readonly matchNodeByNameGlobal: StatementSync;
   private readonly countHeuristicEdgesFromFile: StatementSync;
   private readonly deleteHeuristicEdgesFromFile: StatementSync;
   private readonly insertEdge: StatementSync;
+  /**
+   * v2.5-V8: preloaded name → node id map for target resolution. SCIP target
+   * matching is by bare name globally; a big .scip file resolves thousands of
+   * reference occurrences, each previously a fresh
+   * `SELECT … WHERE name = ? ORDER BY … LIMIT 1` query. Preloading the
+   * first-match id per name once (same ordering: file_path, start_line, id)
+   * turns each per-occurrence resolve into an in-memory Map lookup. Built
+   * lazily in import() after the node-count guard.
+   */
+  private nameToNodeId: Map<string, string> | null = null;
 
   constructor(db: IndexDb) {
     this.db = db;
@@ -258,9 +267,6 @@ export class ScipImporter {
     );
     this.matchNodeByNameInFile = d.prepare(
       "SELECT id FROM nodes WHERE file_path = ? AND name = ? ORDER BY start_line ASC, id ASC LIMIT 1",
-    );
-    this.matchNodeByNameGlobal = d.prepare(
-      "SELECT id FROM nodes WHERE name = ? ORDER BY file_path ASC, start_line ASC, id ASC LIMIT 1",
     );
     this.countHeuristicEdgesFromFile = d.prepare(
       `SELECT COUNT(*) AS n FROM edges
@@ -285,6 +291,20 @@ export class ScipImporter {
     }
     if (!fs.existsSync(opts.scipPath)) {
       throw new Error(`SCIP file not found: ${opts.scipPath}`);
+    }
+
+    // v2.5-V8: preload name → first-match node id (see field doc). One scan of
+    // nodes replaces one query per reference occurrence. Ordering matches the
+    // old per-query `ORDER BY file_path, start_line, id` — the first row per
+    // name in that order wins, so results are identical.
+    this.nameToNodeId = new Map<string, string>();
+    const nameRows = this.db.db
+      .prepare(
+        "SELECT id, name FROM nodes ORDER BY name ASC, file_path ASC, start_line ASC, id ASC",
+      )
+      .all() as Array<{ id: string; name: string }>;
+    for (const r of nameRows) {
+      if (!this.nameToNodeId.has(r.name)) this.nameToNodeId.set(r.name, r.id);
     }
 
     const protobuf = await loadProtobufjs();
@@ -448,14 +468,14 @@ export class ScipImporter {
     return byName?.id ?? null;
   }
 
-  /** Resolve a referenced SCIP symbol to a node id anywhere in the index. */
+  /**
+   * Resolve a referenced SCIP symbol to a node id anywhere in the index, via
+   * the preloaded name → first-match map (built at the top of import()).
+   */
   private resolveTargetNode(scipSymbol: string): string | null {
     const lastName = parseScipSymbolName(scipSymbol);
     if (!lastName) return null;
-    const row = this.matchNodeByNameGlobal.get(lastName) as
-      | { id: string }
-      | undefined;
-    return row?.id ?? null;
+    return this.nameToNodeId?.get(lastName) ?? null;
   }
 }
 

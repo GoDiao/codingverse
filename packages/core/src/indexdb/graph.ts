@@ -93,6 +93,15 @@ interface EdgeRow {
 const CONTAINER_DRILL_DOWN_CAP = 50;
 const IMPACT_DEFAULT_DEPTH = 3;
 const EDGE_KIND = "calls";
+/**
+ * v2.5-V8: per-layer node cap for plain callers/callees BFS. A hub node (e.g.
+ * a util called from hundreds of sites) can otherwise fan a single layer out
+ * to thousands of nodes, freezing the D3 force graph and bloating the JSON.
+ * When a layer would exceed this, the excess new ids are dropped AND edges
+ * into dropped ids are not recorded (no dangling edges), with `truncated` set.
+ * The drill-down path (impact) keeps its own CONTAINER_DRILL_DOWN_CAP.
+ */
+const MAX_LAYER_NODES = 200;
 
 export class CallGraph {
   private readonly db: IndexDb;
@@ -162,7 +171,6 @@ export class CallGraph {
         direction === "reverse"
           ? this.edgesFromTargets(layerSeeds)
           : this.edgesFromSources(layerSeeds);
-      edges.push(...stepEdges);
 
       const nextIds = new Set<string>(
         direction === "reverse"
@@ -175,12 +183,39 @@ export class CallGraph {
       }
 
       if (drillDown) {
+        // impact: container drill-down governs the layer (edges are recorded
+        // inside expandWithContainerDrillDown / here via CONTAINER_DRILL_DOWN_CAP).
+        edges.push(...stepEdges);
         const drill = this.expandWithContainerDrillDown(nextIds, visited);
         edges.push(...drill.edges);
         if (drill.truncated) truncated = true;
+
+        const newIds = [...nextIds].filter((id) => !visited.has(id));
+        if (newIds.length === 0) break;
+        const newNodes = this.nodesByIds(newIds);
+        nodes.push(...newNodes);
+        byDepth.push(newNodes);
+        for (const id of newIds) visited.add(id);
+        frontier = newIds;
+        continue;
       }
 
-      const newIds = [...nextIds].filter((id) => !visited.has(id));
+      // Plain callers/callees: cap the layer's NEW nodes so a hub can't blow
+      // the layer up. `admitted` = ids that will be in the result (already
+      // visited OR newly admitted under the cap); edges whose endpoint is not
+      // admitted are dropped so GraphResult.edges never dangles.
+      const candidates = [...nextIds].filter((id) => !visited.has(id));
+      let newIds = candidates;
+      if (candidates.length > MAX_LAYER_NODES) {
+        newIds = candidates.slice(0, MAX_LAYER_NODES);
+        truncated = true;
+      }
+      const admitted = new Set<string>(visited);
+      for (const id of newIds) admitted.add(id);
+      for (const e of stepEdges) {
+        const endpoint = direction === "reverse" ? e.source : e.target;
+        if (admitted.has(endpoint)) edges.push(e);
+      }
       if (newIds.length === 0) break;
 
       const newNodes = this.nodesByIds(newIds);

@@ -108,6 +108,18 @@ export class Engine {
    */
   private indexDb: IndexDb | null = null;
   /**
+   * v2.5-V8: per-db-connection caches for the read-side query objects. Each
+   * of CallGraph / SearchEngine / PageRank prepares ~3-8 statements in its
+   * constructor; a dashboard polling callers/callees/search-debug rebuilt them
+   * on every request. They're stateless over a fixed db handle, so cache one
+   * instance per Engine (reset only if the db handle is replaced, which it
+   * never is after ensureIndexDb — close() nulls them for GC). Keyed nowhere:
+   * the single indexDb handle is the only connection these read from.
+   */
+  private callGraphCache: CallGraph | null = null;
+  private searchEngineCache: SearchEngine | null = null;
+  private pageRankCache: PageRank | null = null;
+  /**
    * v2-polish: transient read-only IndexDb connections opened by
    * `pagerankImportanceProvider()` when a one-shot `cv pack` finds an
    * existing index.db on disk (from a prior `cv index`/`cv rank`) but
@@ -150,6 +162,24 @@ export class Engine {
       }
     }
     return this.indexDb;
+  }
+
+  /** v2.5-V8: cached CallGraph over the open index (see cache field docs). */
+  private callGraph(): CallGraph {
+    if (!this.callGraphCache) this.callGraphCache = new CallGraph(this.ensureIndexDb());
+    return this.callGraphCache;
+  }
+
+  /** v2.5-V8: cached SearchEngine over the open index. */
+  private searchEngine(): SearchEngine {
+    if (!this.searchEngineCache) this.searchEngineCache = new SearchEngine(this.ensureIndexDb());
+    return this.searchEngineCache;
+  }
+
+  /** v2.5-V8: cached PageRank over the open index. */
+  private pageRank(): PageRank {
+    if (!this.pageRankCache) this.pageRankCache = new PageRank(this.ensureIndexDb());
+    return this.pageRankCache;
   }
 
   /** Stage ①: discover, read, decode, and validate files. */
@@ -275,8 +305,8 @@ export class Engine {
    */
   async syncState(): Promise<SyncState | null> {
     const db = this.ensureIndexDb();
-    const row = db.db
-      .prepare("SELECT value FROM meta WHERE key = ?")
+    const row = db
+      .prepareCached("SELECT value FROM meta WHERE key = ?")
       .get("sync_state") as { value: string } | undefined;
     if (!row) return null;
     try {
@@ -429,8 +459,7 @@ export class Engine {
    * than throwing — SearchEngine handles empty tables gracefully.
    */
   async search(query: string, opts: SearchOptions = {}): Promise<SearchHit[]> {
-    const db = this.ensureIndexDb();
-    const engine = new SearchEngine(db);
+    const engine = this.searchEngine();
     const rows = engine.search({
       query,
       topK: opts.topK ?? 20,
@@ -463,8 +492,7 @@ export class Engine {
     query: string,
     opts: SearchOptions = {},
   ): Promise<SearchDebugResult> {
-    const db = this.ensureIndexDb();
-    const engine = new SearchEngine(db);
+    const engine = this.searchEngine();
     return engine.searchDebug({ query, topK: opts.topK ?? 20 });
   }
 
@@ -508,20 +536,17 @@ export class Engine {
 
   /** Call-hierarchy: who calls this node. */
   async callers(nodeId: string, depth = 1): Promise<SymbolNode[]> {
-    const db = this.ensureIndexDb();
-    return new CallGraph(db).callers(nodeId, depth).nodes;
+    return this.callGraph().callers(nodeId, depth).nodes;
   }
 
   /** Call-hierarchy: what this node calls. */
   async callees(nodeId: string, depth = 1): Promise<SymbolNode[]> {
-    const db = this.ensureIndexDb();
-    return new CallGraph(db).callees(nodeId, depth).nodes;
+    return this.callGraph().callees(nodeId, depth).nodes;
   }
 
   /** Impact radius: reverse BFS with container drill-down. */
   async impact(nodeId: string, depth = 3): Promise<SymbolNode[]> {
-    const db = this.ensureIndexDb();
-    return new CallGraph(db).impact(nodeId, depth).nodes;
+    return this.callGraph().impact(nodeId, depth).nodes;
   }
 
   /**
@@ -533,14 +558,12 @@ export class Engine {
    * so `truncated` is always false, but the field is present for symmetry.
    */
   async callersGraph(nodeId: string, depth = 1): Promise<GraphResult> {
-    const db = this.ensureIndexDb();
-    return new CallGraph(db).callers(nodeId, depth);
+    return this.callGraph().callers(nodeId, depth);
   }
 
   /** v2-final-fix: full callees result — see {@link callersGraph}. */
   async calleesGraph(nodeId: string, depth = 1): Promise<GraphResult> {
-    const db = this.ensureIndexDb();
-    return new CallGraph(db).callees(nodeId, depth);
+    return this.callGraph().callees(nodeId, depth);
   }
 
   /**
@@ -550,8 +573,7 @@ export class Engine {
    * CLI's `cv impact` and V2-6 MCP call when they need to report truncation.
    */
   async impactGraph(nodeId: string, depth = 3): Promise<GraphResult> {
-    const db = this.ensureIndexDb();
-    return new CallGraph(db).impact(nodeId, depth);
+    return this.callGraph().impact(nodeId, depth);
   }
 
   /**
@@ -561,8 +583,7 @@ export class Engine {
    * unranked). Returns convergence stats.
    */
   async rank(opts?: RankOptions): Promise<RankStats> {
-    const db = this.ensureIndexDb();
-    return new PageRank(db).rank(opts);
+    return this.pageRank().rank(opts);
   }
 
   /**
@@ -575,7 +596,7 @@ export class Engine {
    */
   async topRankedNodes(n: number): Promise<RankedNode[]> {
     const db = this.ensureIndexDb();
-    const stmt = db.db.prepare(
+    const stmt = db.prepareCached(
       `SELECT id, pagerank, file_path, start_line, end_line, kind, qualified_name, name
        FROM nodes
        ORDER BY pagerank DESC, id ASC
@@ -608,12 +629,12 @@ export class Engine {
     const cap = Math.max(1, limit);
 
     const totalNodes =
-      (d.prepare("SELECT COUNT(*) AS n FROM nodes").get() as
+      (db.prepareCached("SELECT COUNT(*) AS n FROM nodes").get() as
         | { n: number }
         | undefined)?.n ?? 0;
 
-    const nodeRows = d
-      .prepare(
+    const nodeRows = db
+      .prepareCached(
         `SELECT id, name, qualified_name, file_path, kind, pagerank
          FROM nodes
          ORDER BY pagerank DESC, id ASC
@@ -701,7 +722,7 @@ export class Engine {
   async resolveNodeId(arg: string): Promise<string> {
     if (/^[0-9a-f]{16}$/.test(arg)) return arg;
     const db = this.ensureIndexDb();
-    const stmt = db.db.prepare(
+    const stmt = db.prepareCached(
       "SELECT id FROM nodes WHERE name = ? ORDER BY id ASC LIMIT 1",
     );
     const row = stmt.get(arg) as { id: string } | undefined;
@@ -778,11 +799,10 @@ export class Engine {
   /** Dashboard data source: all observation state in one call. */
   async stats(): Promise<DashboardStats> {
     const db = this.ensureIndexDb();
-    const d = db.db;
     const indexPath = nodePath.join(this.repoPath, STATE_DIR, "index.db");
 
     const countOf = (sql: string): number =>
-      (d.prepare(sql).get() as { n: number } | undefined)?.n ?? 0;
+      (db.prepareCached(sql).get() as { n: number } | undefined)?.n ?? 0;
 
     const files = countOf("SELECT COUNT(*) AS n FROM files");
     const symbols = countOf("SELECT COUNT(*) AS n FROM nodes");
@@ -796,9 +816,9 @@ export class Engine {
       // index.db may not exist yet
     }
 
-    const lastSyncRow = d.prepare("SELECT MAX(indexed_at) AS t FROM files").get() as
-      | { t: number | null }
-      | undefined;
+    const lastSyncRow = db
+      .prepareCached("SELECT MAX(indexed_at) AS t FROM files")
+      .get() as { t: number | null } | undefined;
     const lastSync = lastSyncRow?.t ?? 0;
 
     const health: Record<ParseStatus, number> = {
@@ -807,8 +827,8 @@ export class Engine {
       failed: 0,
       skipped: 0,
     };
-    const healthRows = d
-      .prepare("SELECT parse_status, COUNT(*) AS n FROM files GROUP BY parse_status")
+    const healthRows = db
+      .prepareCached("SELECT parse_status, COUNT(*) AS n FROM files GROUP BY parse_status")
       .all() as Array<{ parse_status: string; n: number }>;
     for (const row of healthRows) {
       switch (row.parse_status) {
@@ -827,16 +847,16 @@ export class Engine {
       }
     }
 
-    const langRows = d
-      .prepare("SELECT language, COUNT(*) AS n FROM files GROUP BY language")
+    const langRows = db
+      .prepareCached("SELECT language, COUNT(*) AS n FROM files GROUP BY language")
       .all() as Array<{ language: string; n: number }>;
     const languages: Record<string, number> = {};
     for (const row of langRows) {
       languages[row.language] = row.n;
     }
 
-    const tokenRows = d
-      .prepare(
+    const tokenRows = db
+      .prepareCached(
         "SELECT file_path, SUM(COALESCE(token_count, 0)) AS tokens FROM chunks GROUP BY file_path",
       )
       .all() as Array<{ file_path: string; tokens: number | null }>;
@@ -851,8 +871,8 @@ export class Engine {
     // Board ⑥ shows the full state via /api/sync (syncState()); syncQueue is
     // the compact changed-file list carried inside DashboardStats.
     const syncQueue: { path: string; status: string }[] = [];
-    const syncRow = d
-      .prepare("SELECT value FROM meta WHERE key = ?")
+    const syncRow = db
+      .prepareCached("SELECT value FROM meta WHERE key = ?")
       .get("sync_state") as { value: string } | undefined;
     if (syncRow) {
       try {
@@ -886,6 +906,11 @@ export class Engine {
     try {
       this.closeTransientDbs();
       this.indexDb?.close();
+      // v2.5-V8: drop cached query objects so their prepared statements are
+      // GC'd with the closed connection.
+      this.callGraphCache = null;
+      this.searchEngineCache = null;
+      this.pageRankCache = null;
     } finally {
       this.closed = true;
     }
