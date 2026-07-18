@@ -518,7 +518,7 @@ function renderHitList(elId, hits, kind) {
       let badge = "";
       let cls = "";
       if (kind === "bm25") badge = `${h.score.toFixed(2)}`;
-      else if (kind === "graph") badge = `Δ${h.proximity}`;
+      else if (kind === "graph") badge = `⇢${h.hops}hop`;
       else {
         badge = `${h.rrf.toFixed(4)}`;
         cls = "pri";
@@ -549,7 +549,7 @@ async function runSearch() {
     renderHitList("search-graph", d.graph, "graph");
     renderHitList("search-fused", d.fused, "fused");
     $("search-meta").textContent =
-      `"${d.ftsQuery}" · ${d.bm25.length} lexical / ${d.graph.length} co-located → top ${d.fused.length} · RRF k=${d.rrfK}`;
+      `"${d.ftsQuery}" · ${d.bm25.length} lexical / ${d.graph.length} call-linked → top ${d.fused.length} · RRF k=${d.rrfK}`;
   } catch (err) {
     $("search-meta").textContent = err instanceof Error ? err.message : String(err);
   }

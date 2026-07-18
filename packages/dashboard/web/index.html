@@ -85,7 +85,7 @@
           <div class="panel-head">
             <span class="panel-no">04</span>
             <h2>Retrieval</h2>
-            <span class="panel-tag" id="search-meta">BM25 vs co-location, fused by RRF</span>
+            <span class="panel-tag" id="search-meta">BM25 vs call-graph, fused by RRF</span>
           </div>
           <div class="search-controls">
             <input id="search-input" type="text" placeholder="query the index — e.g. token budget" />
@@ -97,7 +97,7 @@
               <div id="search-bm25" class="hit-list"></div>
             </div>
             <div class="search-col" data-path="graph">
-              <h3><i class="dot cold"></i>Co-location<small>graph proximity</small></h3>
+              <h3><i class="dot cold"></i>Call-graph<small>caller/callee hops</small></h3>
               <div id="search-graph" class="hit-list"></div>
             </div>
             <div class="search-col fused" data-path="fused">

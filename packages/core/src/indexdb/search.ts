@@ -1,5 +1,6 @@
 import type { StatementSync } from "node:sqlite";
 import type { IndexDb } from "./db.js";
+import { CallGraph } from "./graph.js";
 
 /**
  * V1-4 SearchEngine — dual-path retrieval with Reciprocal Rank Fusion.
@@ -16,19 +17,19 @@ import type { IndexDb } from "./db.js";
  * from that path (equivalent to rank = ∞). All unique chunk ids from both
  * paths are merged, scored, and sorted by rrf descending; topK is taken.
  *
- * Co-location graph (v1 simplified — same-file proximity, NOT a real call
- * graph): the BM25 top-N ids are seeds. For each file containing ≥1 seed,
- * every OTHER chunk in that file is a graph neighbor of each seed in the
- * file, with distance = min |chunk.start_line - seed.start_line| over all
- * seeds in that file excluding itself. A seed alone in its file gets no
- * graph rank; a seed sharing a file with another seed becomes a graph
- * neighbor of that other seed (so it scores on both paths). Graph ranks are
- * assigned by global proximity order (distance asc, then start_line asc,
- * then id asc). v2 replaces this with a PageRank-weighted call-graph
- * expansion.
+ * Call-graph expansion (v3 — real call graph, replaces v1's same-file
+ * proximity): the BM25 top-N chunks are seeds. Each seed chunk maps to the
+ * symbol node(s) it overlaps (same file, line-range intersection). From those
+ * seed nodes we walk the call graph — both callers (reverse) and callees
+ * (forward) — up to `graphDepth` hops. Every reached node maps back to the
+ * chunk(s) it overlaps; those chunks are graph neighbors with distance = hop
+ * count to the nearest seed node. Graph ranks are assigned by global order
+ * (hops asc, then pagerank desc, then start_line asc, then id asc). A chunk
+ * whose node has no call edges gets no graph rank. This makes the graph path a
+ * genuine "related-by-calls" signal (cross-file), not mere textual adjacency.
  *
- * graphDepth: v1 implements depth 1 only (direct same-file neighbors).
- * Higher values are clamped to 1; 0 disables the graph path (BM25-only).
+ * graphDepth: default 1 (direct callers/callees). Clamped to [0,3]; 0 disables
+ * the graph path (BM25-only).
  *
  * Scoring fields on each SearchRow:
  *   scores.bm25  — negated bm25() value (higher = better); 0 if not in BM25.
@@ -72,12 +73,12 @@ export interface SearchDebugResult {
     score: number;
     rank: number;
   }>;
-  /** Co-location path hits, in proximity order. proximity = line distance to nearest seed. */
+  /** Call-graph path hits, in hop order. hops = call-graph distance to nearest seed node. */
   graph: Array<{
     chunkId: string;
     filePath: string;
     startLine: number;
-    proximity: number;
+    hops: number;
     rank: number;
   }>;
   /** Fused top-k, with each path's contributing rank (0 = absent from that path). */
@@ -98,7 +99,7 @@ interface RecallResult {
   bm25Rank: Map<string, number>;
   bm25Score: Map<string, number>;
   graphRank: Map<string, number>;
-  graphDistance: Map<string, number>;
+  graphHops: Map<string, number>;
   chunkMeta: Map<
     string,
     { filePath: string; startLine: number; endLine: number; body: string }
@@ -117,34 +118,33 @@ interface Bm25Row {
   score: number;
 }
 
-interface ChunkRow {
-  id: string;
-  start_line: number;
-  end_line: number;
-  body: string;
-}
-
 interface GraphCandidate {
   id: string;
   startLine: number;
   endLine: number;
   body: string;
   filePath: string;
-  distance: number;
+  hops: number;
+  pagerank: number;
 }
 
 const RRF_K = 60;
 const SEED_CAP = 60;
 const DEFAULT_TOP_K = 20;
 const DEFAULT_WEIGHT = 1;
+const MAX_GRAPH_DEPTH = 3;
+const GRAPH_SEED_NODE_CAP = 40;
 
 export class SearchEngine {
   private readonly bm25Search: StatementSync;
-  private readonly chunksByFile: StatementSync;
   private readonly relatedNodes: StatementSync;
+  private readonly nodesByChunk: StatementSync;
+  private readonly chunksByNode: StatementSync;
+  private readonly callGraph: CallGraph;
 
   constructor(db: IndexDb) {
     const d = db.db;
+    this.callGraph = new CallGraph(db);
     this.bm25Search = d.prepare(
       `SELECT c.id, c.file_path, c.start_line, c.end_line, c.body,
               bm25(chunks_fts) AS score
@@ -154,11 +154,23 @@ export class SearchEngine {
        ORDER BY score
        LIMIT ?`,
     );
-    this.chunksByFile = d.prepare(
-      `SELECT id, start_line, end_line, body FROM chunks WHERE file_path = ?`,
-    );
     this.relatedNodes = d.prepare(
       `SELECT id FROM nodes WHERE file_path = ? ORDER BY pagerank DESC, start_line ASC LIMIT 5`,
+    );
+    // Bridge chunk↔node by same-file line-range overlap. A chunk overlaps a
+    // node when they share a file and their [start,end] line spans intersect.
+    this.nodesByChunk = d.prepare(
+      `SELECT id, pagerank FROM nodes
+       WHERE file_path = ? AND start_line <= ? AND end_line >= ?
+       ORDER BY (end_line - start_line) ASC, start_line ASC`,
+    );
+    this.chunksByNode = d.prepare(
+      `SELECT c.id, c.file_path, c.start_line, c.end_line, c.body, n.pagerank
+       FROM nodes n
+       JOIN chunks c
+         ON c.file_path = n.file_path
+        AND c.start_line <= n.end_line AND c.end_line >= n.start_line
+       WHERE n.id = ?`,
     );
   }
 
@@ -209,7 +221,7 @@ export class SearchEngine {
 
     const recall = this.recall(params);
     if (!recall) return empty;
-    const { ftsQuery, bm25Rank, graphRank, graphDistance, chunkMeta, fused } = recall;
+    const { ftsQuery, bm25Rank, graphRank, graphHops, chunkMeta, fused } = recall;
 
     const meta = (id: string) => chunkMeta.get(id)!;
 
@@ -229,7 +241,7 @@ export class SearchEngine {
         chunkId: id,
         filePath: meta(id).filePath,
         startLine: meta(id).startLine,
-        proximity: graphDistance.get(id) ?? 0,
+        hops: graphHops.get(id) ?? 0,
         rank,
       }));
 
@@ -265,7 +277,7 @@ export class SearchEngine {
     const topK = params.topK ?? DEFAULT_TOP_K;
     const bm25Weight = params.bm25Weight ?? DEFAULT_WEIGHT;
     const graphWeight = params.graphWeight ?? DEFAULT_WEIGHT;
-    const graphDepth = Math.min(params.graphDepth ?? 1, 1);
+    const graphDepth = Math.max(0, Math.min(params.graphDepth ?? 1, MAX_GRAPH_DEPTH));
 
     const ftsQuery = tokenizeQuery(query);
     if (ftsQuery.length === 0) return null;
@@ -293,39 +305,74 @@ export class SearchEngine {
     }
 
     const graphRank = new Map<string, number>();
-    const graphDistance = new Map<string, number>();
+    const graphHops = new Map<string, number>();
     if (graphDepth >= 1) {
-      const seedsByFile = new Map<string, Array<{ id: string; startLine: number }>>();
+      // 1) Seed chunks → seed nodes (chunk overlaps node by file + line span).
+      const seedNodeIds = new Set<string>();
       for (const r of bm25Rows) {
-        const arr = seedsByFile.get(r.file_path) ?? [];
-        arr.push({ id: r.id, startLine: r.start_line });
-        seedsByFile.set(r.file_path, arr);
+        const nodeRows = this.nodesByChunk.all(
+          r.file_path,
+          r.end_line,
+          r.start_line,
+        ) as unknown as Array<{ id: string; pagerank: number }>;
+        for (const n of nodeRows) {
+          seedNodeIds.add(n.id);
+          if (seedNodeIds.size >= GRAPH_SEED_NODE_CAP) break;
+        }
+        if (seedNodeIds.size >= GRAPH_SEED_NODE_CAP) break;
       }
 
-      const graphCandidates: GraphCandidate[] = [];
-      for (const [filePath, seeds] of seedsByFile) {
-        const chunks = this.chunksByFile.all(filePath) as unknown as ChunkRow[];
-        for (const chunk of chunks) {
-          let minDist = Infinity;
-          for (const s of seeds) {
-            if (s.id === chunk.id) continue;
-            const dist = Math.abs(chunk.start_line - s.startLine);
-            if (dist < minDist) minDist = dist;
+      // 2) Walk callers + callees from each seed node; record min hop per node.
+      const nodeHops = new Map<string, number>();
+      for (const seedId of seedNodeIds) {
+        for (const dir of ["callers", "callees"] as const) {
+          const res =
+            dir === "callers"
+              ? this.callGraph.callers(seedId, graphDepth)
+              : this.callGraph.callees(seedId, graphDepth);
+          // byDepth[h] = nodes reached at hop h; byDepth[0] = [seed itself].
+          for (let h = 1; h < res.byDepth.length; h++) {
+            for (const n of res.byDepth[h]!) {
+              const prev = nodeHops.get(n.id);
+              if (prev === undefined || h < prev) nodeHops.set(n.id, h);
+            }
           }
-          if (minDist === Infinity) continue;
-          graphCandidates.push({
-            id: chunk.id,
-            startLine: chunk.start_line,
-            endLine: chunk.end_line,
-            body: chunk.body,
-            filePath,
-            distance: minDist,
-          });
         }
       }
 
-      graphCandidates.sort((a, b) => {
-        if (a.distance !== b.distance) return a.distance - b.distance;
+      // 3) Neighbor nodes → chunks they overlap. distance = node hop count.
+      const candidates = new Map<string, GraphCandidate>();
+      for (const [nodeId, hops] of nodeHops) {
+        const chunkRows = this.chunksByNode.all(nodeId) as unknown as Array<{
+          id: string;
+          file_path: string;
+          start_line: number;
+          end_line: number;
+          body: string;
+          pagerank: number;
+        }>;
+        for (const c of chunkRows) {
+          // A seed chunk reached via calls scores on BOTH paths (strongest
+          // signal — textually relevant AND call-related), so we do NOT skip
+          // seeds here; RRF rewards dual-path presence.
+          const existing = candidates.get(c.id);
+          if (existing === undefined || hops < existing.hops) {
+            candidates.set(c.id, {
+              id: c.id,
+              startLine: c.start_line,
+              endLine: c.end_line,
+              body: c.body,
+              filePath: c.file_path,
+              hops,
+              pagerank: c.pagerank ?? 0,
+            });
+          }
+        }
+      }
+
+      const graphCandidates = [...candidates.values()].sort((a, b) => {
+        if (a.hops !== b.hops) return a.hops - b.hops;
+        if (a.pagerank !== b.pagerank) return b.pagerank - a.pagerank;
         if (a.startLine !== b.startLine) return a.startLine - b.startLine;
         return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
       });
@@ -333,7 +380,7 @@ export class SearchEngine {
       for (let i = 0; i < graphCandidates.length; i++) {
         const g = graphCandidates[i]!;
         graphRank.set(g.id, i + 1);
-        graphDistance.set(g.id, g.distance);
+        graphHops.set(g.id, g.hops);
         if (!chunkMeta.has(g.id)) {
           chunkMeta.set(g.id, {
             filePath: g.filePath,
@@ -367,7 +414,7 @@ export class SearchEngine {
       bm25Rank,
       bm25Score,
       graphRank,
-      graphDistance,
+      graphHops,
       chunkMeta,
       fused,
       bm25Weight,

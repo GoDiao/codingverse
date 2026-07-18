@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from "vitest";
 import type { FileEntry, ParsedFile } from "@codingverse/shared";
 import { IndexDb } from "./db.js";
 import { IndexStore } from "./store.js";
+import { RefResolver } from "./resolve.js";
 import { SearchEngine } from "./search.js";
 import { symbolId } from "./ids.js";
 import { parseFiles, disposeParsers } from "../parse/index.js";
@@ -41,6 +42,9 @@ const seed = async (
   db.migrate();
   const store = new IndexStore(db);
   await store.write({ parsed, sources: srcMap(parsed, contents) });
+  // v3: the graph path walks the real call graph, so resolve unresolved refs
+  // into edges (Engine.index does this after store.write; tests must too).
+  new RefResolver(db).resolveAll();
   const engine = new SearchEngine(db);
   return { db, parsed, engine };
 };
@@ -177,61 +181,76 @@ describe("SearchEngine — no results", () => {
   });
 });
 
-describe("SearchEngine — co-location graph (same-file proximity)", () => {
-  it("returns the BM25 chunk AND a same-file neighbor", async () => {
-    const src = `export function alphaWidget() {
-  // alpha widget marker
+describe("SearchEngine — call-graph expansion (v3, real call graph)", () => {
+  it("pulls in a CROSS-FILE caller of the matched symbol via the graph path", async () => {
+    // helper.ts defines a uniquely-named symbol; consumer.ts (a different
+    // file) calls it. A query matching ONLY helper.ts should still surface
+    // consumer.ts's chunk through the call-graph path — impossible under the
+    // old same-file-proximity heuristic.
+    const helperSrc = `export function zephyrCompute() {
   return 1;
 }
-export function betaThing() {
-  return 2;
-}
-export function gammaStuff() {
-  return 3;
+`;
+    const consumerSrc = `import { zephyrCompute } from "./helper";
+export function runConsumer() {
+  return zephyrCompute() + 1;
 }
 `;
-    const { db, parsed, engine } = await seed([{ path: "coloc.ts", content: src }]);
-    const aChunk = chunkByFile(parsed, "coloc.ts", 1);
-    const bChunk = chunkByFile(parsed, "coloc.ts", 5);
-    expect(aChunk).toBeDefined();
-    expect(bChunk).toBeDefined();
+    const { db, parsed, engine } = await seed([
+      { path: "helper.ts", content: helperSrc },
+      { path: "consumer.ts", content: consumerSrc },
+    ]);
+    const helperChunk = chunkByFile(parsed, "helper.ts", 1);
+    const consumerChunk = chunkByFile(parsed, "consumer.ts", 1);
+    expect(helperChunk).toBeDefined();
+    expect(consumerChunk).toBeDefined();
 
-    const res = engine.search({ query: "alpha widget" });
+    const res = engine.search({ query: "zephyrCompute" });
     const ids = res.map((r) => r.chunkId);
-    expect(ids).toContain(aChunk.id);
-    expect(ids).toContain(bChunk.id);
+    // BM25 finds helper.ts; call graph pulls in consumer.ts (cross-file caller).
+    expect(ids).toContain(helperChunk.id);
+    expect(ids).toContain(consumerChunk.id);
+    db.close();
+  });
+
+  it("a matched symbol with NO call edges yields no graph neighbors", async () => {
+    const src = `export function lonelyOrbit() {
+  return 42;
+}
+`;
+    const { db, engine } = await seed([{ path: "lonely.ts", content: src }]);
+    const debug = engine.searchDebug({ query: "lonelyOrbit" });
+    expect(debug.bm25.length).toBeGreaterThan(0);
+    // no callers/callees → graph path empty.
+    expect(debug.graph).toEqual([]);
     db.close();
   });
 });
 
-describe("SearchEngine — RRF ordering (graph presence boosts rank)", () => {
-  it("ranks a BM25-rank-2 + graph-rank-1 chunk above a BM25-rank-1 chunk with no graph", async () => {
-    const ySrc = `export function widget() { return widget(); }\n`;
-    const xSrc = `export function widget() {
-  return 1;
+describe("SearchEngine — RRF ordering (call-graph presence boosts rank)", () => {
+  it("a graph-connected callee is surfaced even though it lacks the query text", async () => {
+    // seed.ts matches the query AND calls deepHelper. deepHelper's own body
+    // has none of the query terms, so it can ONLY appear via the call-graph
+    // path — proving graph presence, not text, brought it in.
+    const seedSrc = `export function radiantSeed() {
+  return deepHelper();
 }
-export function helperFunc() {
-  const value = widget();
-  return value + 1;
+`;
+    const helperSrc = `export function deepHelper() {
+  return 123;
 }
 `;
     const { db, parsed, engine } = await seed([
-      { path: "y.ts", content: ySrc },
-      { path: "x.ts", content: xSrc },
+      { path: "seed.ts", content: seedSrc },
+      { path: "helper.ts", content: helperSrc },
     ]);
+    const seedChunk = chunkByFile(parsed, "seed.ts", 1);
+    const helperChunk = chunkByFile(parsed, "helper.ts", 1);
 
-    const yChunk = chunkByFile(parsed, "y.ts", 1);
-    const xChunk = chunkByFile(parsed, "x.ts", 1);
-    expect(yChunk).toBeDefined();
-    expect(xChunk).toBeDefined();
-
-    const res = engine.search({ query: "widget" });
+    const res = engine.search({ query: "radiantSeed" });
     const ids = res.map((r) => r.chunkId);
-    expect(ids).toContain(yChunk.id);
-    expect(ids).toContain(xChunk.id);
-    const yIdx = ids.indexOf(yChunk.id);
-    const xIdx = ids.indexOf(xChunk.id);
-    expect(xIdx).toBeLessThan(yIdx);
+    expect(ids).toContain(seedChunk.id); // BM25 hit
+    expect(ids).toContain(helperChunk.id); // graph-only (callee, no query text)
     db.close();
   });
 });
@@ -296,36 +315,38 @@ export function otherFunc() {
 });
 
 describe("SearchEngine — weights apply", () => {
-  it("bm25Weight=0 graphWeight=1 → graph path dominates, BM25-only chunk does not win", async () => {
-    const ySrc = `export function widget() { return widget(); }\n`;
-    const xSrc = `export function widget() {
-  return 1;
+  it("bm25Weight=0 graphWeight=1 → only call-graph presence scores; an edgeless BM25 hit does not win", async () => {
+    // seed.ts matches the query and calls emberCallee (a graph neighbor).
+    // island.ts also matches the query (via trigram) but has NO call edges.
+    // With bm25Weight=0, only the graph path scores → the edgeless island
+    // must not be the top result; the graph-connected callee should appear.
+    const seedSrc = `export function orbitPrime() {
+  return emberCallee();
 }
-export function helperFunc() {
-  const value = widget();
-  return value + 1;
+`;
+    const calleeSrc = `export function emberCallee() {
+  return 7;
+}
+`;
+    const islandSrc = `export function orbitPrimeIsland() {
+  return 9;
 }
 `;
     const { db, parsed, engine } = await seed([
-      { path: "y.ts", content: ySrc },
-      { path: "x.ts", content: xSrc },
+      { path: "seed.ts", content: seedSrc },
+      { path: "callee.ts", content: calleeSrc },
+      { path: "island.ts", content: islandSrc },
     ]);
+    const calleeChunk = chunkByFile(parsed, "callee.ts", 1);
+    const islandChunk = chunkByFile(parsed, "island.ts", 1);
 
-    const yChunk = chunkByFile(parsed, "y.ts", 1);
-    const xChunk = chunkByFile(parsed, "x.ts", 1);
-
-    const res = engine.search({
-      query: "widget",
-      bm25Weight: 0,
-      graphWeight: 1,
-    });
+    const res = engine.search({ query: "orbitPrime", bm25Weight: 0, graphWeight: 1 });
     expect(res.length).toBeGreaterThan(0);
-    expect(res[0]!.chunkId).not.toBe(yChunk.id);
     const ids = res.map((r) => r.chunkId);
-    expect(ids).toContain(xChunk.id);
-    if (ids.includes(yChunk.id)) {
-      expect(ids.indexOf(xChunk.id)).toBeLessThan(ids.indexOf(yChunk.id));
-    }
+    // The graph-connected callee is present…
+    expect(ids).toContain(calleeChunk.id);
+    // …and the edgeless BM25-only island is not the winner.
+    expect(res[0]!.chunkId).not.toBe(islandChunk.id);
     db.close();
   });
 });
