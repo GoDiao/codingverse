@@ -213,6 +213,14 @@ export interface PackOptions {
   exclude?: string[];
   layerStrategy?: "auto" | "full" | "skeleton" | "outline";
   alwaysFull?: string[];
+  /**
+   * v3: internal post-ingest whitelist of repo-relative paths. When set, only
+   * these files survive into compression (others dropped before layering).
+   * Used by diff-scoped (`packScoped`) and query-scoped (`packQuery`) packing
+   * to restrict output to a computed file set without glob-metachar hazards.
+   * Undefined = pack everything (normal behavior).
+   */
+  restrictTo?: string[];
 }
 
 /** One file rendered at a chosen layer. */
@@ -245,6 +253,23 @@ export interface PackResult {
   files: PackedFile[];
   /** Skeleton expansion map: stable id → source span. */
   expandMap: Record<string, ExpandEntry>;
+}
+
+/**
+ * v3: a PackResult produced by scoped packing (diff- or query-scoped), plus the
+ * provenance of how the file set was chosen. `seedFiles` are the files that
+ * directly matched (changed files, or search-hit files); `expandedFiles` are
+ * the additional files pulled in by call-graph impact/neighborhood expansion.
+ * Their union is what was actually packed (restrictTo).
+ */
+export interface PackScopeResult extends PackResult {
+  scope: "changed" | "since" | "query";
+  /** Files that directly matched the scope (changed / search-hit). */
+  seedFiles: string[];
+  /** Extra files pulled in via call-graph expansion (impact / neighborhood). */
+  expandedFiles: string[];
+  /** For scope="since": the ref compared against. For "query": the query text. */
+  scopeArg?: string;
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -261,6 +261,40 @@ export function createHandler(engine: Engine, repoPath: string) {
           ) {
             opts.layerStrategy = strategy;
           }
+
+          // V3-1: scope=changed / since=<ref> → diff-scoped pack (changed
+          // files + impact radius). Otherwise whole-repo pack.
+          const scope = url.searchParams.get("scope");
+          const since = url.searchParams.get("since") ?? undefined;
+          const depthParam = Number(url.searchParams.get("depth"));
+          const depth = depthParam > 0 ? depthParam : 2;
+          try {
+            if (scope === "changed" || since) {
+              const scopedResult = await engine.packScoped({
+                ...opts,
+                since,
+                depth,
+              });
+              sendJson(res, 200, {
+                content: scopedResult.content,
+                format,
+                tokenCount: scopedResult.tokenCount,
+                fileCount: scopedResult.fileCount,
+                expandableCount: Object.keys(scopedResult.expandMap).length,
+                scope: scopedResult.scope,
+                seedFiles: scopedResult.seedFiles,
+                expandedFiles: scopedResult.expandedFiles,
+              });
+              return;
+            }
+          } catch (err) {
+            // Not a git repo / bad ref — surface as 400 so the UI can explain.
+            sendJson(res, 400, {
+              error: err instanceof Error ? err.message : String(err),
+            });
+            return;
+          }
+
           const result = await engine.pack(opts);
           sendJson(res, 200, {
             content: result.content,

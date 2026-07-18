@@ -418,6 +418,8 @@ h3 small { color: var(--faint); text-transform: none; letter-spacing: 0; font-we
   margin: 12px 0;
 }
 .pack-output-actions { display: flex; gap: 8px; margin-left: auto; }
+.pack-scope-label { cursor: pointer; gap: 6px; }
+.pack-scope-label input[type="checkbox"] { accent-color: var(--hot); cursor: pointer; }
 .pack-content {
   margin: 0;
   max-height: 420px;

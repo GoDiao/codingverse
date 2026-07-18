@@ -17,6 +17,7 @@ import type {
   GraphData,
   NodeDetail,
   PackPreview,
+  PackScopeResult,
   Layer,
 } from "@codingverse/shared";
 import fs from "node:fs/promises";
@@ -27,7 +28,7 @@ import { parseFiles, parseFilesCached } from "./parse/index.js";
 import { TokenBudget, buildTokenTreemap, type FileTokenCount } from "./budget/index.js";
 import { compress, render } from "./assemble/index.js";
 import { ExpandMapStore, type ExpandMapSnapshot } from "./assemble/expand-store.js";
-import { ParseCache } from "./cache/index.js";
+import { ParseCache, changedFilesSinceHead, changedFilesSince } from "./cache/index.js";
 import {
   CallGraph,
   IndexDb,
@@ -357,7 +358,16 @@ export class Engine {
    * tree-sitter parsing entirely, making repeat packs fast.
    */
   async pack(opts: PackOptions = {}): Promise<PackResult> {
-    const { files: ingested } = await ingest(this.repoPath, opts);
+    const { files: ingestedAll } = await ingest(this.repoPath, opts);
+    // v3: diff/query-scoped packing restricts the file set to a computed
+    // whitelist (exact repo-relative paths), applied here so all downstream
+    // stages (parse → compress → render) only see the scoped files.
+    const ingested = opts.restrictTo
+      ? (() => {
+          const keep = new Set(opts.restrictTo.map((p) => p.replace(/\\/g, "/")));
+          return ingestedAll.filter((f) => keep.has(f.path.replace(/\\/g, "/")));
+        })()
+      : ingestedAll;
     const sources = new Map(ingested.map((f) => [f.path, f.content]));
 
     // Incremental parse via git-blob-hash cache.
@@ -449,6 +459,84 @@ export class Engine {
       layerCounts,
       expandableCount: Object.keys(result.expandMap).length,
     };
+  }
+
+  /**
+   * v3 (V3-1): diff-scoped pack. Packs the changed files PLUS everything their
+   * changes could affect (reverse call-graph impact), so the output is exactly
+   * "this change + its blast radius" — the context an agent needs to reason
+   * about a diff. `since` compares against a git ref; otherwise the working
+   * tree vs HEAD. Returns a PackScopeResult carrying seed/expanded provenance.
+   *
+   * When the repo isn't a git repo (or git is unavailable), throws so the CLI
+   * can report clearly. When the tree is clean, returns an empty pack.
+   */
+  async packScoped(
+    opts: PackOptions & { since?: string; depth?: number } = {},
+  ): Promise<PackScopeResult> {
+    const { since, depth = 2, ...packOpts } = opts;
+
+    const changed = since
+      ? await changedFilesSince(this.repoPath, since)
+      : await changedFilesSinceHead(this.repoPath);
+    if (changed === null) {
+      throw new Error(
+        since
+          ? `git diff against '${since}' failed — not a git repo, bad ref, or git unavailable`
+          : "git change detection failed — not a git repo or git unavailable",
+      );
+    }
+
+    // Restrict seeds to text files we would actually ingest (drop deleted
+    // files and binaries). We compute the expanded set via call-graph impact.
+    const seedFiles = [...changed].sort((a, b) => a.localeCompare(b));
+    const expandedFiles = await this.expandFilesByImpact(seedFiles, depth);
+
+    const restrictTo = [...new Set([...seedFiles, ...expandedFiles])];
+    const result = await this.pack({ ...packOpts, restrictTo });
+
+    return {
+      ...result,
+      scope: since ? "since" : "changed",
+      scopeArg: since,
+      seedFiles,
+      expandedFiles,
+    };
+  }
+
+  /**
+   * v3 helper: given a set of repo-relative file paths, return the ADDITIONAL
+   * files reachable by reverse call-graph impact from the symbols in those
+   * files (callers / affected nodes), up to `depth`. Used by packScoped to
+   * pull in the blast radius of a change. Files already in `seedFiles` are not
+   * repeated. Safe on a never-indexed repo (returns []).
+   */
+  private async expandFilesByImpact(
+    seedFiles: string[],
+    depth: number,
+  ): Promise<string[]> {
+    if (seedFiles.length === 0 || depth <= 0) return [];
+    if (!existsSync(nodePath.join(this.repoPath, STATE_DIR, "index.db"))) return [];
+
+    const db = this.ensureIndexDb();
+    const seedSet = new Set(seedFiles.map((p) => p.replace(/\\/g, "/")));
+
+    // Symbols defined in the seed files → their node ids.
+    const placeholders = seedFiles.map(() => "?").join(",");
+    const seedNodes = db.db
+      .prepare(`SELECT id FROM nodes WHERE file_path IN (${placeholders})`)
+      .all(...seedFiles) as Array<{ id: string }>;
+
+    const cg = this.callGraph();
+    const affectedFiles = new Set<string>();
+    for (const { id } of seedNodes) {
+      const res = cg.impact(id, depth);
+      for (const n of res.nodes) {
+        const fp = n.filePath.replace(/\\/g, "/");
+        if (!seedSet.has(fp)) affectedFiles.add(fp);
+      }
+    }
+    return [...affectedFiles].sort((a, b) => a.localeCompare(b));
   }
 
   /**

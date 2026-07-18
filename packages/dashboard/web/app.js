@@ -661,6 +661,7 @@ let packContentFormat = "xml";
 
 function wirePackOutput(slider, stratEl) {
   const fmtEl = $("pack-format");
+  const scopeEl = $("pack-scope-changed");
   const loadBtn = $("pack-load");
   const copyBtn = $("pack-copy");
   const dlBtn = $("pack-download");
@@ -677,29 +678,43 @@ function wirePackOutput(slider, stratEl) {
     const budget = Number(slider.value);
     const strategy = stratEl.value;
     const format = fmtEl.value;
+    const changed = scopeEl && scopeEl.checked;
     meta.textContent = "packing…";
     setReady(false);
     try {
       const params = new URLSearchParams({ budget: String(budget), strategy, format });
+      // V3-1: scope=changed → diff-scoped pack (changed files + impact radius).
+      if (changed) params.set("scope", "changed");
       const res = await fetch(`/api/pack-content?${params}`);
       if (!res.ok) {
-        meta.textContent = `HTTP ${res.status}`;
+        const body = await res.json().catch(() => ({}));
+        meta.textContent = body.error || `HTTP ${res.status}`;
         return;
       }
       const data = await res.json();
       packContent = data.content;
       packContentFormat = data.format;
       pre.textContent = data.content;
-      meta.textContent = `${data.tokenCount.toLocaleString()} tok · ${data.fileCount} files · ${data.expandableCount} expandable`;
-      setReady(true);
+      const scopeNote =
+        data.scope === "changed"
+          ? ` · scope: ${data.seedFiles.length} changed + ${data.expandedFiles.length} impacted`
+          : "";
+      meta.textContent = `${data.tokenCount.toLocaleString()} tok · ${data.fileCount} files · ${data.expandableCount} expandable${scopeNote}`;
+      if (data.scope === "changed" && data.seedFiles.length === 0) {
+        pre.innerHTML = '<span class="empty">No changed files vs HEAD — nothing to pack.</span>';
+      }
+      setReady(data.fileCount > 0);
     } catch (err) {
       meta.textContent = err instanceof Error ? err.message : String(err);
     }
   };
 
   loadBtn.onclick = load;
-  // Changing format after a load re-fetches so preview + download stay in sync.
+  // Changing format/scope after a load re-fetches so preview + download stay in sync.
   fmtEl.addEventListener("change", () => {
+    if (packContent !== null) load();
+  });
+  if (scopeEl) scopeEl.addEventListener("change", () => {
     if (packContent !== null) load();
   });
 
