@@ -10,6 +10,7 @@ import { registerCallees } from "./commands/callees.js";
 import { registerImpact } from "./commands/impact.js";
 import { registerRank } from "./commands/rank.js";
 import { registerServe } from "./commands/serve.js";
+import { registerWatch } from "./commands/watch.js";
 
 const program = new Command();
 
@@ -30,6 +31,7 @@ registerCallees(program);
 registerImpact(program);
 registerRank(program);
 registerServe(program);
+registerWatch(program);
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.error(err instanceof Error ? err.message : String(err));

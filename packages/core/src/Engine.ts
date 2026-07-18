@@ -141,6 +141,11 @@ export class Engine {
     return new Engine(repoPath, opts);
   }
 
+  /** Absolute repo root this engine operates on (v3: used by watchRepo). */
+  get repoPathAbs(): string {
+    return this.repoPath;
+  }
+
   /**
    * Open the SQLite index on first use. Throws a clear Engine-level error if
    * the engine is closed or the index cannot be opened (e.g. EACCES on
