@@ -420,6 +420,18 @@ h3 small { color: var(--faint); text-transform: none; letter-spacing: 0; font-we
 .pack-output-actions { display: flex; gap: 8px; margin-left: auto; }
 .pack-scope-label { cursor: pointer; gap: 6px; }
 .pack-scope-label input[type="checkbox"] { accent-color: var(--hot); cursor: pointer; }
+.pack-query-input {
+  flex: 1 1 200px;
+  min-width: 160px;
+  background: var(--ink);
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  padding: 5px 9px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.pack-query-input:focus { outline: none; border-color: var(--hot); }
 .pack-content {
   margin: 0;
   max-height: 420px;

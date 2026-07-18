@@ -540,6 +540,85 @@ export class Engine {
   }
 
   /**
+   * v3 (V3-2): query-scoped pack. Runs a search, takes the top-k hits as seed
+   * files, then expands their call-graph NEIGHBORHOOD (both callers and
+   * callees) so the packed context has the matched code plus what it calls and
+   * what calls it — a self-contained slice for answering a question. Returns a
+   * PackScopeResult (scope="query", scopeArg=query text).
+   */
+  async packQuery(
+    query: string,
+    opts: PackOptions & { topK?: number; depth?: number } = {},
+  ): Promise<PackScopeResult> {
+    const { topK = 10, depth = 2, ...packOpts } = opts;
+
+    const hits = await this.search(query, { topK });
+    const seedSet = new Set<string>();
+    const seedNodeIds = new Set<string>();
+    for (const h of hits) {
+      seedSet.add(h.filePath.replace(/\\/g, "/"));
+      for (const nid of h.relatedNodes) seedNodeIds.add(nid);
+    }
+    const seedFiles = [...seedSet].sort((a, b) => a.localeCompare(b));
+
+    const expandedFiles = await this.expandFilesByNeighborhood(
+      seedFiles,
+      seedNodeIds,
+      seedSet,
+      depth,
+    );
+
+    const restrictTo = [...new Set([...seedFiles, ...expandedFiles])];
+    const result = await this.pack({ ...packOpts, restrictTo });
+
+    return {
+      ...result,
+      scope: "query",
+      scopeArg: query,
+      seedFiles,
+      expandedFiles,
+    };
+  }
+
+  /**
+   * v3 helper: bidirectional call-graph neighborhood of a query's hit nodes —
+   * both callers (impact) and callees. Seeds are the search-hit node ids plus
+   * every symbol defined in the seed files (so a file-level hit still expands).
+   * Returns files NOT already in `seedSet`. Safe on a never-indexed repo ([]).
+   */
+  private async expandFilesByNeighborhood(
+    seedFiles: string[],
+    seedNodeIds: Set<string>,
+    seedSet: Set<string>,
+    depth: number,
+  ): Promise<string[]> {
+    if (seedFiles.length === 0 || depth <= 0) return [];
+    if (!existsSync(nodePath.join(this.repoPath, STATE_DIR, "index.db"))) return [];
+
+    const db = this.ensureIndexDb();
+    // Node ids: hit-related nodes ∪ all symbols defined in the seed files.
+    const nodeIds = new Set<string>(seedNodeIds);
+    const placeholders = seedFiles.map(() => "?").join(",");
+    const fileNodes = db.db
+      .prepare(`SELECT id FROM nodes WHERE file_path IN (${placeholders})`)
+      .all(...seedFiles) as Array<{ id: string }>;
+    for (const { id } of fileNodes) nodeIds.add(id);
+
+    const cg = this.callGraph();
+    const neighborFiles = new Set<string>();
+    for (const id of nodeIds) {
+      // callers (reverse) + callees (forward) = full neighborhood.
+      const callers = cg.callers(id, depth);
+      const callees = cg.callees(id, depth);
+      for (const n of [...callers.nodes, ...callees.nodes]) {
+        const fp = n.filePath.replace(/\\/g, "/");
+        if (!seedSet.has(fp)) neighborFiles.add(fp);
+      }
+    }
+    return [...neighborFiles].sort((a, b) => a.localeCompare(b));
+  }
+
+  /**
    * Search mode: BM25 + co-location graph, fused via RRF.
    *
    * v1 has no vector path (embeddings land in v1.5), so SearchHit.scores.vector

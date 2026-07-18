@@ -20,7 +20,9 @@ export function registerPack(program: Command): void {
     .option("--always-full <globs>", "comma-separated globs to keep at full", "")
     .option("--changed", "pack only files changed vs HEAD + their impact radius")
     .option("--since <ref>", "pack only files changed since <git ref> + their impact radius")
-    .option("-d, --depth <n>", "impact expansion depth for --changed/--since", "2")
+    .option("--query <text>", "pack only files matching a search + their call-graph neighborhood")
+    .option("-k, --top-k <n>", "search hits to seed --query packing", "10")
+    .option("-d, --depth <n>", "expansion depth for --changed/--since/--query", "2")
     .option("--list", "list ingested files only (M1 preview)")
     .option("--symbols", "list extracted symbols per file (M2 preview)")
     .action(
@@ -34,6 +36,8 @@ export function registerPack(program: Command): void {
           alwaysFull: string;
           changed?: boolean;
           since?: string;
+          query?: string;
+          topK: string;
           depth: string;
           list?: boolean;
           symbols?: boolean;
@@ -93,14 +97,24 @@ export function registerPack(program: Command): void {
           format: opts.format,
           alwaysFull,
         };
-        const scoped = Boolean(opts.changed || opts.since);
-        const result = scoped
-          ? await engine.packScoped({
-              ...packBase,
-              since: opts.since,
-              depth: Math.max(0, Number(opts.depth)),
-            })
-          : await engine.pack(packBase);
+        const depth = Math.max(0, Number(opts.depth));
+        const scoped = Boolean(opts.changed || opts.since || opts.query);
+        let result;
+        if (opts.query) {
+          result = await engine.packQuery(opts.query, {
+            ...packBase,
+            topK: Math.max(1, Number(opts.topK)),
+            depth,
+          });
+        } else if (opts.changed || opts.since) {
+          result = await engine.packScoped({
+            ...packBase,
+            since: opts.since,
+            depth,
+          });
+        } else {
+          result = await engine.pack(packBase);
+        }
 
         if (opts.output) {
           await writeFile(opts.output, result.content, "utf8");
@@ -114,13 +128,23 @@ export function registerPack(program: Command): void {
         const cs = engine.getCacheStats();
         if (scoped) {
           const s = result as PackScopeResult;
-          const scopeLabel = opts.since ? `since ${opts.since}` : "changed vs HEAD";
-          console.error(
-            `[cv pack] scope: ${scopeLabel} — ${s.seedFiles.length} changed, ` +
-              `${s.expandedFiles.length} impacted (depth ${opts.depth})`,
-          );
-          if (s.seedFiles.length === 0) {
-            console.error("[cv pack] no changed files — nothing to pack.");
+          if (opts.query) {
+            console.error(
+              `[cv pack] scope: query "${opts.query}" — ${s.seedFiles.length} hit files, ` +
+                `${s.expandedFiles.length} neighborhood (depth ${opts.depth})`,
+            );
+            if (s.seedFiles.length === 0) {
+              console.error("[cv pack] no search hits — nothing to pack.");
+            }
+          } else {
+            const scopeLabel = opts.since ? `since ${opts.since}` : "changed vs HEAD";
+            console.error(
+              `[cv pack] scope: ${scopeLabel} — ${s.seedFiles.length} changed, ` +
+                `${s.expandedFiles.length} impacted (depth ${opts.depth})`,
+            );
+            if (s.seedFiles.length === 0) {
+              console.error("[cv pack] no changed files — nothing to pack.");
+            }
           }
         }
         console.error(

@@ -262,13 +262,30 @@ export function createHandler(engine: Engine, repoPath: string) {
             opts.layerStrategy = strategy;
           }
 
-          // V3-1: scope=changed / since=<ref> → diff-scoped pack (changed
-          // files + impact radius). Otherwise whole-repo pack.
+          // V3-1/V3-2: scoped packing. scope=changed / since=<ref> →
+          // diff-scoped (changed + impact); query=<text> → query-scoped
+          // (search hits + call-graph neighborhood). Otherwise whole-repo.
           const scope = url.searchParams.get("scope");
           const since = url.searchParams.get("since") ?? undefined;
+          const query = url.searchParams.get("query") ?? undefined;
           const depthParam = Number(url.searchParams.get("depth"));
           const depth = depthParam > 0 ? depthParam : 2;
           try {
+            if (query) {
+              const qr = await engine.packQuery(query, { ...opts, depth });
+              sendJson(res, 200, {
+                content: qr.content,
+                format,
+                tokenCount: qr.tokenCount,
+                fileCount: qr.fileCount,
+                expandableCount: Object.keys(qr.expandMap).length,
+                scope: qr.scope,
+                scopeArg: qr.scopeArg,
+                seedFiles: qr.seedFiles,
+                expandedFiles: qr.expandedFiles,
+              });
+              return;
+            }
             if (scope === "changed" || since) {
               const scopedResult = await engine.packScoped({
                 ...opts,

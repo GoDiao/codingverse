@@ -10,7 +10,8 @@ afterAll(() => disposeParsers());
 
 // helper.ts defines a helper; consumer.ts calls it. Changing helper.ts should,
 // via reverse impact, pull consumer.ts into the scoped pack.
-const HELPER = `export function computeBudget(n: number): number {
+const HELPER = `// zephyrmarker uniquely identifies this helper for search tests.
+export function computeBudget(n: number): number {
   return n * 2;
 }
 `;
@@ -131,6 +132,53 @@ describe("Engine.packScoped — diff-scoped pack (V3-1)", () => {
     await expect(engine.packScoped({ tokenBudget: 4000 })).rejects.toThrow(
       /git/i,
     );
+    await engine.close();
+    await fsp.rm(plain, { recursive: true, force: true });
+  });
+});
+
+describe("Engine.packQuery — query-scoped pack (V3-2)", () => {
+  it("matched file is a seed; its neighborhood is pulled in", async () => {
+    const engine = await Engine.open(dir);
+    await engine.index();
+    // "zephyrmarker" appears ONLY in helper.ts → it's the sole search hit, so
+    // consumer.ts (its caller) can only enter via neighborhood expansion.
+    const res = await engine.packQuery("zephyrmarker", {
+      tokenBudget: 8000,
+      topK: 5,
+      depth: 2,
+    });
+    expect(res.scope).toBe("query");
+    expect(res.scopeArg).toBe("zephyrmarker");
+    expect(res.seedFiles).toContain("helper.ts");
+    expect(res.seedFiles).not.toContain("consumer.ts");
+    // neighborhood: consumer.ts calls computeBudget → pulled in via call graph.
+    expect(res.expandedFiles).toContain("consumer.ts");
+    await engine.close();
+  });
+
+  it("no search hits → empty pack (no throw)", async () => {
+    const engine = await Engine.open(dir);
+    await engine.index();
+    const res = await engine.packQuery("zzzznomatchxyzzy", {
+      tokenBudget: 4000,
+      topK: 5,
+    });
+    expect(res.scope).toBe("query");
+    expect(res.seedFiles).toEqual([]);
+    expect(res.fileCount).toBe(0);
+    await engine.close();
+  });
+
+  it("does not require git (works in a non-git repo)", async () => {
+    const plain = await fsp.mkdtemp(path.join(os.tmpdir(), "cv-q-nogit-"));
+    await fsp.writeFile(path.join(plain, "helper.ts"), HELPER);
+    await fsp.writeFile(path.join(plain, "consumer.ts"), CONSUMER);
+    const engine = await Engine.open(plain);
+    await engine.index();
+    const res = await engine.packQuery("computeBudget", { tokenBudget: 6000 });
+    expect(res.scope).toBe("query");
+    expect(res.seedFiles).toContain("helper.ts");
     await engine.close();
     await fsp.rm(plain, { recursive: true, force: true });
   });

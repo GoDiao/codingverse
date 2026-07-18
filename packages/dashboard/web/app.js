@@ -662,6 +662,7 @@ let packContentFormat = "xml";
 function wirePackOutput(slider, stratEl) {
   const fmtEl = $("pack-format");
   const scopeEl = $("pack-scope-changed");
+  const queryEl = $("pack-scope-query");
   const loadBtn = $("pack-load");
   const copyBtn = $("pack-copy");
   const dlBtn = $("pack-download");
@@ -679,12 +680,14 @@ function wirePackOutput(slider, stratEl) {
     const strategy = stratEl.value;
     const format = fmtEl.value;
     const changed = scopeEl && scopeEl.checked;
+    const query = queryEl && queryEl.value.trim();
     meta.textContent = "packing…";
     setReady(false);
     try {
       const params = new URLSearchParams({ budget: String(budget), strategy, format });
-      // V3-1: scope=changed → diff-scoped pack (changed files + impact radius).
-      if (changed) params.set("scope", "changed");
+      // V3-2 query-scope takes precedence; else V3-1 changed-scope; else whole repo.
+      if (query) params.set("query", query);
+      else if (changed) params.set("scope", "changed");
       const res = await fetch(`/api/pack-content?${params}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -695,13 +698,16 @@ function wirePackOutput(slider, stratEl) {
       packContent = data.content;
       packContentFormat = data.format;
       pre.textContent = data.content;
-      const scopeNote =
-        data.scope === "changed"
-          ? ` · scope: ${data.seedFiles.length} changed + ${data.expandedFiles.length} impacted`
-          : "";
+      let scopeNote = "";
+      if (data.scope === "changed") {
+        scopeNote = ` · scope: ${data.seedFiles.length} changed + ${data.expandedFiles.length} impacted`;
+      } else if (data.scope === "query") {
+        scopeNote = ` · query: ${data.seedFiles.length} hits + ${data.expandedFiles.length} neighborhood`;
+      }
       meta.textContent = `${data.tokenCount.toLocaleString()} tok · ${data.fileCount} files · ${data.expandableCount} expandable${scopeNote}`;
-      if (data.scope === "changed" && data.seedFiles.length === 0) {
-        pre.innerHTML = '<span class="empty">No changed files vs HEAD — nothing to pack.</span>';
+      if ((data.scope === "changed" || data.scope === "query") && data.seedFiles.length === 0) {
+        const why = data.scope === "query" ? "No search hits" : "No changed files vs HEAD";
+        pre.innerHTML = `<span class="empty">${why} — nothing to pack.</span>`;
       }
       setReady(data.fileCount > 0);
     } catch (err) {
@@ -716,6 +722,10 @@ function wirePackOutput(slider, stratEl) {
   });
   if (scopeEl) scopeEl.addEventListener("change", () => {
     if (packContent !== null) load();
+  });
+  // Enter in the query box triggers a load (also re-loads if content already shown).
+  if (queryEl) queryEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") load();
   });
 
   copyBtn.onclick = async () => {
