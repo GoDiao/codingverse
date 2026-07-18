@@ -1,6 +1,9 @@
 import type { Language } from "@codingverse/shared";
 import { TS_TAGS, JS_TAGS } from "./typescript.js";
 import { PY_TAGS } from "./python.js";
+import { GO_TAGS } from "./go.js";
+import { RUST_TAGS } from "./rust.js";
+import { JAVA_TAGS } from "./java.js";
 
 /**
  * Declarative per-language configuration.
@@ -31,6 +34,9 @@ const EXTENSION_MAP: Record<string, Language> = {
   ".jsx": "jsx",
   ".py": "python",
   ".pyw": "python",
+  ".go": "go",
+  ".rs": "rust",
+  ".java": "java",
 };
 
 const TS_CHUNK_NODES = [
@@ -42,6 +48,22 @@ const TS_CHUNK_NODES = [
   "enum_declaration",
 ];
 const JS_CHUNK_NODES = ["function_declaration", "method_definition", "class_declaration"];
+const GO_CHUNK_NODES = ["function_declaration", "method_declaration", "type_declaration"];
+const RUST_CHUNK_NODES = [
+  "function_item",
+  "struct_item",
+  "enum_item",
+  "trait_item",
+  "impl_item",
+  "type_item",
+];
+const JAVA_CHUNK_NODES = [
+  "class_declaration",
+  "interface_declaration",
+  "enum_declaration",
+  "method_declaration",
+  "constructor_declaration",
+];
 
 const CONFIGS: Partial<Record<Language, LanguageConfig>> = {
   typescript: {
@@ -83,6 +105,30 @@ const CONFIGS: Partial<Record<Language, LanguageConfig>> = {
     chunkNodeTypes: ["function_definition", "class_definition"],
     scopeStyle: "indent",
     lineComment: "#",
+  },
+  go: {
+    language: "go",
+    wasmFile: "tree-sitter-go.wasm",
+    tagsQuery: GO_TAGS,
+    chunkNodeTypes: GO_CHUNK_NODES,
+    scopeStyle: "brace",
+    lineComment: "//",
+  },
+  rust: {
+    language: "rust",
+    wasmFile: "tree-sitter-rust.wasm",
+    tagsQuery: RUST_TAGS,
+    chunkNodeTypes: RUST_CHUNK_NODES,
+    scopeStyle: "brace",
+    lineComment: "//",
+  },
+  java: {
+    language: "java",
+    wasmFile: "tree-sitter-java.wasm",
+    tagsQuery: JAVA_TAGS,
+    chunkNodeTypes: JAVA_CHUNK_NODES,
+    scopeStyle: "brace",
+    lineComment: "//",
   },
 };
 
