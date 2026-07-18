@@ -15,6 +15,7 @@ import type {
   ParseStatus,
   SyncState,
   GraphData,
+  NodeDetail,
   PackPreview,
   Layer,
 } from "@codingverse/shared";
@@ -688,6 +689,69 @@ export class Engine {
       maxPagerank,
       totalNodes,
       truncated: totalNodes > nodes.length,
+    };
+  }
+
+  /**
+   * Board ③ click-detail: full metadata for one symbol node plus its global
+   * pagerank rank (1 = highest in the repo). Returns null when the id is
+   * unknown so the caller can 404 rather than throw.
+   */
+  async nodeDetail(id: string): Promise<NodeDetail | null> {
+    const db = this.ensureIndexDb();
+
+    const row = db
+      .prepareCached(
+        `SELECT id, name, qualified_name, kind, file_path, language,
+                start_line, end_line, signature, docstring, visibility, pagerank
+         FROM nodes WHERE id = ?`,
+      )
+      .get(id) as
+      | {
+          id: string;
+          name: string;
+          qualified_name: string | null;
+          kind: string | null;
+          file_path: string;
+          language: string | null;
+          start_line: number | null;
+          end_line: number | null;
+          signature: string | null;
+          docstring: string | null;
+          visibility: string | null;
+          pagerank: number | null;
+        }
+      | undefined;
+
+    if (!row) return null;
+
+    const totalNodes =
+      (db.prepareCached("SELECT COUNT(*) AS n FROM nodes").get() as
+        | { n: number }
+        | undefined)?.n ?? 0;
+
+    // Global rank = how many nodes outrank this one by pagerank, + 1.
+    const pagerank = row.pagerank ?? 0;
+    const ahead =
+      (db
+        .prepareCached("SELECT COUNT(*) AS n FROM nodes WHERE pagerank > ?")
+        .get(pagerank) as { n: number } | undefined)?.n ?? 0;
+
+    return {
+      id: row.id,
+      name: row.name,
+      qualifiedName: row.qualified_name ?? undefined,
+      kind: row.kind ?? "",
+      filePath: row.file_path,
+      language: row.language ?? undefined,
+      startLine: row.start_line ?? undefined,
+      endLine: row.end_line ?? undefined,
+      signature: row.signature ?? undefined,
+      docstring: row.docstring ?? undefined,
+      visibility: row.visibility ?? undefined,
+      pagerank,
+      pagerankRank: ahead + 1,
+      totalNodes,
     };
   }
 

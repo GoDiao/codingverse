@@ -4,78 +4,163 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>codingverse · observe</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700;800&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/static/style.css" />
     <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   </head>
   <body>
-    <header>
-      <h1>codingverse <span class="mode">observe</span></h1>
-      <div id="repo" class="repo"></div>
+    <div class="sweep" id="sweep" aria-hidden="true"></div>
+
+    <header class="deck-bar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">codingverse</span>
+        <span class="brand-mode">OBSERVE</span>
+      </div>
+      <div class="repo" id="repo"></div>
+      <div class="vitals" id="vitals" aria-label="index vitals"></div>
     </header>
 
-    <main>
-      <section class="board" id="board-overview">
-        <h2>① Index overview</h2>
-        <div id="cards" class="cards"></div>
-        <div class="split">
-          <div id="health" class="panel"></div>
-          <div id="languages" class="panel"></div>
-        </div>
-      </section>
+    <div class="layout">
+      <nav class="rail" id="rail" aria-label="boards">
+        <a href="#board-overview" data-board="board-overview"><b>01</b><span>Overview</span></a>
+        <a href="#board-tokenmap" data-board="board-tokenmap"><b>02</b><span>Token map</span></a>
+        <a href="#board-graph" data-board="board-graph"><b>03</b><span>Code graph</span></a>
+        <a href="#board-search" data-board="board-search"><b>04</b><span>Retrieval</span></a>
+        <a href="#board-pack" data-board="board-pack"><b>05</b><span>Pack</span></a>
+        <a href="#board-sync" data-board="board-sync"><b>06</b><span>Sync</span></a>
+      </nav>
 
-      <section class="board" id="board-tokenmap">
-        <h2>② Token map</h2>
-        <div id="treemap" class="treemap"></div>
-      </section>
+      <main>
+        <section class="panel" id="board-overview">
+          <div class="panel-head">
+            <span class="panel-no">01</span>
+            <h2>Overview</h2>
+            <span class="panel-tag">parse health · language mix</span>
+          </div>
+          <div class="split">
+            <div class="subpanel" id="health"></div>
+            <div class="subpanel" id="languages"></div>
+          </div>
+        </section>
 
-      <section class="board" id="board-sync">
-        <h2>⑥ Sync status</h2>
-        <div id="sync"></div>
-      </section>
+        <section class="panel" id="board-tokenmap">
+          <div class="panel-head">
+            <span class="panel-no">02</span>
+            <h2>Token map</h2>
+            <span class="panel-tag">token concentration by file</span>
+          </div>
+          <div id="treemap" class="treemap"></div>
+          <div class="thermal-scale" id="treemap-scale"></div>
+        </section>
 
-      <section class="board" id="board-graph">
-        <h2>③ Code graph</h2>
-        <div class="graph-controls">
-          <span id="graph-meta" class="muted"></span>
-          <button id="graph-reset" type="button">clear highlight</button>
-        </div>
-        <div id="graph" class="graph"></div>
-        <div id="graph-detail" class="graph-detail muted">Click a node to highlight its callers (blue) and callees (orange).</div>
-      </section>
-      <section class="board" id="board-search">
-        <h2>④ Search inspector</h2>
-        <div class="search-controls">
-          <input id="search-input" type="text" placeholder="query (e.g. token budget)" />
-          <button id="search-run" type="button">search</button>
-          <span id="search-meta" class="muted"></span>
-        </div>
-        <div id="search-cols" class="search-cols">
-          <div class="search-col"><h3>BM25</h3><div id="search-bm25" class="hit-list"></div></div>
-          <div class="search-col"><h3>Co-location</h3><div id="search-graph" class="hit-list"></div></div>
-          <div class="search-col"><h3>Fused (RRF)</h3><div id="search-fused" class="hit-list"></div></div>
-        </div>
-      </section>
-      <section class="board" id="board-pack">
-        <h2>⑤ Pack preview</h2>
-        <div class="pack-controls">
-          <label class="pack-label">Budget
-            <input id="pack-budget" type="range" min="2000" max="50000" step="1000" value="10000" />
-            <span id="pack-budget-val">10,000 tok</span>
-          </label>
-          <label class="pack-label">Strategy
-            <select id="pack-strategy">
-              <option value="auto">auto</option>
-              <option value="full">full</option>
-              <option value="skeleton">skeleton</option>
-              <option value="outline">outline</option>
-            </select>
-          </label>
-          <button id="pack-run" type="button">preview</button>
-          <span id="pack-meta" class="muted"></span>
-        </div>
-        <div id="pack-result"></div>
-      </section>
-    </main>
+        <section class="panel" id="board-graph">
+          <div class="panel-head">
+            <span class="panel-no">03</span>
+            <h2>Code graph</h2>
+            <span class="panel-tag" id="graph-meta"></span>
+            <button id="graph-fit" type="button" class="ghost-btn">fit view</button>
+            <button id="graph-reset" type="button" class="ghost-btn">clear highlight</button>
+          </div>
+          <div class="graph-controls">
+            <label class="graph-label">Nodes
+              <input id="graph-limit" type="range" min="10" max="200" step="1" value="200" />
+              <output id="graph-limit-val">200</output>
+            </label>
+            <span class="graph-hint">top N by PageRank</span>
+          </div>
+          <div class="graph-wrap">
+            <div id="graph" class="graph"></div>
+            <aside id="node-detail" class="node-detail" hidden></aside>
+          </div>
+          <div id="graph-detail" class="graph-detail">Click a node to trace its callers <i class="dot cold"></i> and callees <i class="dot hot"></i>.</div>
+        </section>
+
+        <section class="panel" id="board-search">
+          <div class="panel-head">
+            <span class="panel-no">04</span>
+            <h2>Retrieval</h2>
+            <span class="panel-tag" id="search-meta">BM25 vs co-location, fused by RRF</span>
+          </div>
+          <div class="search-controls">
+            <input id="search-input" type="text" placeholder="query the index — e.g. token budget" />
+            <button id="search-run" type="button" class="solid-btn">trace</button>
+          </div>
+          <div id="search-cols" class="search-cols">
+            <div class="search-col" data-path="bm25">
+              <h3><i class="dot lex"></i>BM25<small>lexical</small></h3>
+              <div id="search-bm25" class="hit-list"></div>
+            </div>
+            <div class="search-col" data-path="graph">
+              <h3><i class="dot cold"></i>Co-location<small>graph proximity</small></h3>
+              <div id="search-graph" class="hit-list"></div>
+            </div>
+            <div class="search-col fused" data-path="fused">
+              <h3><i class="dot hot"></i>Fused<small>RRF</small></h3>
+              <div id="search-fused" class="hit-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="board-pack">
+          <div class="panel-head">
+            <span class="panel-no">05</span>
+            <h2>Pack preview</h2>
+            <span class="panel-tag" id="pack-meta"></span>
+          </div>
+          <div class="pack-controls">
+            <label class="pack-label">Budget
+              <input id="pack-budget" type="range" min="2000" max="50000" step="1000" value="10000" />
+              <output id="pack-budget-val">10,000 tok</output>
+            </label>
+            <label class="pack-label">Strategy
+              <select id="pack-strategy">
+                <option value="auto">auto</option>
+                <option value="full">full</option>
+                <option value="skeleton">skeleton</option>
+                <option value="outline">outline</option>
+              </select>
+            </label>
+            <button id="pack-run" type="button" class="solid-btn">preview</button>
+          </div>
+          <div id="pack-result"></div>
+
+          <details class="pack-output" id="pack-output">
+            <summary>packed output</summary>
+            <div class="pack-output-bar">
+              <label class="pack-label">Format
+                <select id="pack-format">
+                  <option value="xml">xml</option>
+                  <option value="markdown">markdown</option>
+                  <option value="json">json</option>
+                </select>
+              </label>
+              <button id="pack-load" type="button" class="ghost-btn">load content</button>
+              <span id="pack-output-meta" class="graph-hint"></span>
+              <span class="pack-output-actions">
+                <button id="pack-copy" type="button" class="ghost-btn" disabled>Copy</button>
+                <button id="pack-download" type="button" class="solid-btn" disabled>Download</button>
+              </span>
+            </div>
+            <pre id="pack-content" class="pack-content"><span class="empty">Load content to preview the packed context (this runs the full pack).</span></pre>
+          </details>
+        </section>
+
+        <section class="panel" id="board-sync">
+          <div class="panel-head">
+            <span class="panel-no">06</span>
+            <h2>Sync status</h2>
+            <span class="panel-tag">last index run · parse-cache</span>
+          </div>
+          <div id="sync"></div>
+        </section>
+      </main>
+    </div>
 
     <div id="error" class="error" hidden></div>
 

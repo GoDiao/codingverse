@@ -354,6 +354,29 @@ export interface GraphData {
 }
 
 /**
+ * Full metadata for a single symbol node, backing board ③'s click-detail
+ * panel. Everything the `nodes` row holds plus a global `pagerankRank`
+ * (1 = highest pagerank in the repo) so the UI can show "#12 of 393".
+ * Null fields mean the parser never captured that column for this symbol.
+ */
+export interface NodeDetail {
+  id: string;
+  name: string;
+  qualifiedName?: string;
+  kind: string;
+  filePath: string;
+  language?: string;
+  startLine?: number;
+  endLine?: number;
+  signature?: string;
+  docstring?: string;
+  visibility?: string;
+  pagerank: number;
+  pagerankRank: number;
+  totalNodes: number;
+}
+
+/**
  * v2.5-V4: runtime state of the last `index()` run, persisted to the `meta`
  * table so a fresh `cv serve` process (which never runs index() itself) can
  * still surface board ⑥ (sync status). `changedFiles` are the cache-miss

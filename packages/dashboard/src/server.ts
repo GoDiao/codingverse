@@ -15,6 +15,7 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import nodePath from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFile } from "node:child_process";
 import { Engine } from "@codingverse/core";
 import { STATE_DIR } from "@codingverse/shared";
 
@@ -65,6 +66,38 @@ async function sendStatic(res: http.ServerResponse, relPath: string): Promise<vo
   } catch {
     sendJson(res, 404, { error: "not found" });
   }
+}
+
+/**
+ * Reveal or open a filesystem path with the OS's default handler. `reveal`
+ * selects the file in the file manager (Explorer/Finder); otherwise the path
+ * is opened with its default application. Uses execFile with array args (no
+ * shell) so a path can never be interpreted as a command. The caller MUST
+ * have already validated that `absPath` stays inside the repo.
+ */
+function osOpen(absPath: string, reveal: boolean): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let cmd: string;
+    let args: string[];
+    if (process.platform === "win32") {
+      cmd = "explorer.exe";
+      // explorer returns exit code 1 even on success, so we don't treat a
+      // non-zero code as failure below for win32.
+      args = reveal ? [`/select,${absPath}`] : [absPath];
+    } else if (process.platform === "darwin") {
+      cmd = "open";
+      args = reveal ? ["-R", absPath] : [absPath];
+    } else {
+      // Linux/other: no portable "reveal", so open the parent dir when
+      // revealing, else the path itself.
+      cmd = "xdg-open";
+      args = [reveal ? nodePath.dirname(absPath) : absPath];
+    }
+    execFile(cmd, args, (err) => {
+      if (err && process.platform !== "win32") reject(err);
+      else resolve();
+    });
+  });
 }
 
 /**
@@ -135,6 +168,49 @@ export function createHandler(engine: Engine, repoPath: string) {
           sendJson(res, 200, await engine.graphData(limit));
           return;
         }
+        if (path === "/api/node") {
+          // Board ③ click-detail: full metadata for one node id. Unknown id
+          // → 404 so the UI can show a "not found" state.
+          const id = url.searchParams.get("id");
+          if (!id) {
+            sendJson(res, 400, { error: "missing id" });
+            return;
+          }
+          const detail = await engine.nodeDetail(id);
+          if (!detail) {
+            sendJson(res, 404, { error: "unknown node" });
+            return;
+          }
+          sendJson(res, 200, detail);
+          return;
+        }
+        if (path === "/api/open") {
+          // Board ③ click-detail: reveal/open a repo file in the OS. LOCAL
+          // TOOL ONLY — guarded to paths inside the repo. `path` is repo-
+          // relative (as stored in nodes.file_path); reveal=1 highlights it
+          // in the file manager, else opens with the default app.
+          const rel = url.searchParams.get("path") ?? "";
+          const reveal = url.searchParams.get("reveal") === "1";
+          const abs = nodePath.resolve(repoPath, rel);
+          // Containment guard: abs must be repoPath itself or under it.
+          if (abs !== repoPath && !abs.startsWith(repoPath + nodePath.sep)) {
+            sendJson(res, 403, { error: "path outside repo" });
+            return;
+          }
+          if (!existsSync(abs)) {
+            sendJson(res, 404, { error: "file not found", path: rel });
+            return;
+          }
+          try {
+            await osOpen(abs, reveal);
+            sendJson(res, 200, { ok: true, path: rel, reveal });
+          } catch (err) {
+            sendJson(res, 500, {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+          return;
+        }
         if (path === "/api/pack-preview") {
           // Board ⑤: run pack() but return only the layer/token summary (no
           // content). budget + strategy drive layer selection; defaults match
@@ -156,6 +232,43 @@ export function createHandler(engine: Engine, repoPath: string) {
             opts.layerStrategy = strategy;
           }
           sendJson(res, 200, await engine.packPreview(opts));
+          return;
+        }
+        if (path === "/api/pack-content") {
+          // Board ⑤: the FULL rendered pack output (not just the preview
+          // summary). Same budget/strategy knobs as pack-preview, plus a
+          // format param (xml | markdown | json). Returns the content string
+          // so the UI can preview / copy / download it. Kept separate from
+          // pack-preview so the budget slider stays cheap (no huge payload).
+          const budgetParam = Number(url.searchParams.get("budget"));
+          const strategy = url.searchParams.get("strategy") ?? undefined;
+          const formatParam = url.searchParams.get("format") ?? "xml";
+          const format =
+            formatParam === "xml" || formatParam === "markdown" || formatParam === "json"
+              ? formatParam
+              : "xml";
+          const opts: {
+            tokenBudget?: number;
+            layerStrategy?: "auto" | "full" | "skeleton" | "outline";
+            format: "xml" | "markdown" | "json";
+          } = { format };
+          if (budgetParam > 0) opts.tokenBudget = budgetParam;
+          if (
+            strategy === "auto" ||
+            strategy === "full" ||
+            strategy === "skeleton" ||
+            strategy === "outline"
+          ) {
+            opts.layerStrategy = strategy;
+          }
+          const result = await engine.pack(opts);
+          sendJson(res, 200, {
+            content: result.content,
+            format,
+            tokenCount: result.tokenCount,
+            fileCount: result.fileCount,
+            expandableCount: Object.keys(result.expandMap).length,
+          });
           return;
         }
         if (path === "/api/callers" || path === "/api/callees") {
