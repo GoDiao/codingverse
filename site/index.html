@@ -1,149 +1,23 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>codingverse — index once, three ways</title>
-  <meta name="description" content="A unified Code RAG toolkit. Index once, three-mode output: pack, search, observe. Local, tree-sitter powered, no embeddings." />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./styles.css" />
-</head>
-<body>
-  <div class="starfield" aria-hidden="true"></div>
-
-  <!-- NAV -->
-  <header class="nav">
-    <a class="nav-brand" href="#top">codingverse</a>
-    <nav class="nav-links">
-      <a href="#modes" data-i18n="nav.modes">The three modes</a>
-      <a href="#why" data-i18n="nav.why">Why</a>
-      <a href="#start" data-i18n="nav.start">Get started</a>
-      <a class="nav-gh" href="https://github.com/GoDiao/codingverse" target="_blank" rel="noopener">GitHub</a>
-      <button class="lang-toggle" id="lang-toggle" aria-label="Toggle language">中文</button>
-    </nav>
-  </header>
-
-  <main id="top">
-    <!-- HERO -->
-    <section class="hero">
-      <p class="hero-eyebrow" data-i18n="hero.eyebrow">Unified Code RAG toolkit</p>
-      <h1 class="hero-title">codingverse</h1>
-      <p class="hero-tagline" data-i18n="hero.tagline">Index once. Three ways out.</p>
-      <p class="hero-sub" data-i18n="hero.sub">Turn a repository into a single local index — then pack it for an LLM, search it with a real call graph, or observe it on a live dashboard. No embeddings. No services. No keys.</p>
-      <div class="hero-cta">
-        <a class="btn btn-primary" href="#start" data-i18n="hero.ctaStart">Get started</a>
-        <a class="btn btn-ghost" href="https://github.com/GoDiao/codingverse" target="_blank" rel="noopener" data-i18n="hero.ctaGithub">View on GitHub</a>
-      </div>
-      <div class="hero-meta">
-        <span data-i18n="hero.metaLocal">100% local</span>
-        <span class="dot">·</span>
-        <span data-i18n="hero.metaLang">6 languages</span>
-        <span class="dot">·</span>
-        <span>MIT</span>
-      </div>
-    </section>
-
-    <!-- THREE MODES -->
-    <section class="modes" id="modes">
-      <p class="section-index">01</p>
-      <h2 class="section-title" data-i18n="modes.title">One index. Three outputs.</h2>
-      <p class="section-lead" data-i18n="modes.lead">Every repository becomes a single SQLite index of symbols, call edges, and chunks. From that one index, three complementary modes.</p>
-
-      <div class="mode-list">
-        <article class="mode">
-          <span class="mode-num">pack</span>
-          <h3 class="mode-name" data-i18n="modes.pack.name">Pack</h3>
-          <p class="mode-desc" data-i18n="modes.pack.desc">Assemble a token-budgeted, layered context file for an LLM. Important symbols stay full; the rest degrade to skeleton, outline, or omit — never blindly truncated.</p>
-        </article>
-        <article class="mode">
-          <span class="mode-num">search</span>
-          <h3 class="mode-name" data-i18n="modes.search.name">Search</h3>
-          <p class="mode-desc" data-i18n="modes.search.desc">Hybrid retrieval: BM25 lexical matching fused with a real call graph, so results carry callers and callees — not just text hits.</p>
-        </article>
-        <article class="mode">
-          <span class="mode-num">observe</span>
-          <h3 class="mode-name" data-i18n="modes.observe.name">Observe</h3>
-          <p class="mode-desc" data-i18n="modes.observe.desc">A six-board dashboard to see what the index actually holds — token map, code graph, retrieval inspector, and live pack preview.</p>
-        </article>
-      </div>
-    </section>
-
-    <!-- WHY -->
-    <section class="why" id="why">
-      <p class="section-index">02</p>
-      <h2 class="section-title" data-i18n="why.title">Context, not the whole repo.</h2>
-      <p class="section-lead" data-i18n="why.lead">Feeding a whole repo to an LLM wastes tokens. Hand-picking files loses context. codingverse extracts exactly the slice you need.</p>
-      <div class="why-grid">
-        <div class="why-item">
-          <h3 data-i18n="why.budget.t">Token budget, respected</h3>
-          <p data-i18n="why.budget.d">Pack the most important code at full fidelity and compress the rest to skeletons — ranked by PageRank over the call graph.</p>
-        </div>
-        <div class="why-item">
-          <h3 data-i18n="why.scoped.t">Scoped by change or query</h3>
-          <p data-i18n="why.scoped.d">Pack only what changed plus its impact radius, or only what a query matches plus its call-graph neighborhood.</p>
-        </div>
-        <div class="why-item">
-          <h3 data-i18n="why.graph.t">A real call graph</h3>
-          <p data-i18n="why.graph.d">Retrieval walks resolved caller/callee edges, so a match brings its structural neighbors with it.</p>
-        </div>
-        <div class="why-item">
-          <h3 data-i18n="why.local.t">Entirely local</h3>
-          <p data-i18n="why.local.d">A SQLite index built from tree-sitter parses. No embeddings, no external services, no API keys.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- START / DEMO -->
-    <section class="start" id="start">
-      <p class="section-index">03</p>
-      <h2 class="section-title" data-i18n="start.title">Get started in five commands.</h2>
-      <p class="section-lead" data-i18n="start.lead">Build from source (Node ≥ 20, pnpm), then index and go.</p>
-      <div class="terminal">
-        <div class="terminal-bar"><span></span><span></span><span></span></div>
-        <pre class="terminal-body"><code><span class="c-com" data-i18n="demo.c1"># build the index for a repo</span>
-<span class="c-cmd">cv index</span> ./my-repo
-<span class="c-com" data-i18n="demo.c2"># rank symbols by importance</span>
-<span class="c-cmd">cv rank</span> ./my-repo
-<span class="c-com" data-i18n="demo.c3"># pack a 32k-token context file</span>
-<span class="c-cmd">cv pack</span> ./my-repo --budget 32000 -o context.xml
-<span class="c-com" data-i18n="demo.c4"># or search with the call graph</span>
-<span class="c-cmd">cv search</span> "retry backoff" ./my-repo
-<span class="c-com" data-i18n="demo.c5"># or open the dashboard</span>
-<span class="c-cmd">cv serve</span> ./my-repo</code></pre>
-      </div>
-    </section>
-
-    <!-- LANGUAGES -->
-    <section class="langs">
-      <p class="section-index">04</p>
-      <h2 class="section-title" data-i18n="langs.title">Six languages, one convention.</h2>
-      <p class="section-lead" data-i18n="langs.lead">Adding a language is one tree-sitter query plus one registry entry.</p>
-      <ul class="lang-row">
-        <li>TypeScript</li>
-        <li>JavaScript</li>
-        <li>Python</li>
-        <li>Go</li>
-        <li>Rust</li>
-        <li>Java</li>
-      </ul>
-    </section>
-  </main>
-
-  <!-- FOOTER -->
-  <footer class="footer">
-    <div class="footer-brand">codingverse</div>
-    <p class="footer-tag" data-i18n="footer.tag">Index once. Three ways out.</p>
-    <div class="footer-links">
-      <a href="https://github.com/GoDiao/codingverse" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://github.com/GoDiao/codingverse/blob/master/docs/architecture.md" target="_blank" rel="noopener" data-i18n="footer.arch">Architecture</a>
-      <a href="https://github.com/GoDiao/codingverse/blob/master/docs/cli-reference.md" target="_blank" rel="noopener" data-i18n="footer.cli">CLI reference</a>
-      <a href="https://github.com/GoDiao/codingverse/blob/master/LICENSE" target="_blank" rel="noopener">MIT</a>
-    </div>
-    <p class="footer-copy">© 2026 godiao · MIT License</p>
-  </footer>
-
-  <script src="./main.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>codingverse — index once, three ways</title>
+    <meta
+      name="description"
+      content="A unified Code RAG toolkit. Index once, three-mode output: pack, search, observe. Local, tree-sitter powered, no embeddings."
+    />
+    <meta property="og:title" content="codingverse — index once, three ways" />
+    <meta
+      property="og:description"
+      content="A unified Code RAG toolkit. Index once, three-mode output: pack, search, observe."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
