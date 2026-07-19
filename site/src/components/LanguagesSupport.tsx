@@ -116,10 +116,10 @@ export default function LanguagesSupport({ t }: LanguagesSupportProps) {
               <button
                 key={lang.name}
                 onClick={() => setSelectedLang(lang.name)}
-                className={`text-left p-4 rounded-xl border font-mono transition-all flex flex-col justify-between cursor-pointer ${
+                className={`text-left p-4 rounded-2xl font-mono transition-all flex flex-col justify-between cursor-pointer ${
                   isSelected
-                    ? "bg-void-2 border-cosmos/55 text-ink shadow-lg"
-                    : "bg-transparent border-line text-ink-dim hover:text-ink hover:border-ink-faint hover:bg-void-2/10"
+                    ? "text-ink bg-cosmos/[0.06] shadow-[inset_0_0_0_1px_rgba(139,125,255,0.45),0_18px_40px_-30px_rgba(91,75,255,0.5)]"
+                    : "panel panel-hover text-ink-dim hover:text-ink"
                 }`}
               >
                 <span className="text-sm font-bold">{lang.name}</span>
@@ -144,16 +144,16 @@ export default function LanguagesSupport({ t }: LanguagesSupportProps) {
 
       {/* Query Preview on the right */}
       <div className="lg:col-span-7 flex flex-col">
-        <div className="bg-[#050507] border border-line rounded-2xl p-5 flex flex-col justify-between flex-1 relative shadow-2xl overflow-hidden min-h-[300px]">
+        <div className="screen p-5 flex flex-col justify-between flex-1 relative overflow-hidden min-h-[300px]">
           <div className="absolute top-0 right-0 h-16 w-16 bg-gradient-to-bl from-cosmos/10 via-transparent to-transparent pointer-events-none" />
-          
+
           <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-line pb-3">
+            <div className="flex items-center justify-between edge-bottom pb-3">
               <span className="text-xs font-mono text-ink-dim flex items-center space-x-1.5">
                 <Terminal className="w-4 h-4 text-cosmos-soft" />
                 <span>queries/{selectedLang.toLowerCase()}.scm</span>
               </span>
-              <span className="text-[10px] bg-void-3 border border-line px-2 py-0.5 rounded text-ink-faint font-mono">
+              <span className="text-[10px] panel px-2 py-0.5 text-ink-faint font-mono">
                 {t.languages.queryBadge}
               </span>
             </div>
@@ -164,7 +164,7 @@ export default function LanguagesSupport({ t }: LanguagesSupportProps) {
             </pre>
           </div>
 
-          <div className="pt-3 border-t border-line/50 text-[10px] font-mono text-ink-faint">
+          <div className="pt-3 edge-top text-[10px] font-mono text-ink-faint">
             {t.languages.extractionNote}
           </div>
         </div>

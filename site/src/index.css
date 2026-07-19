@@ -57,3 +57,142 @@ html {
   mix-blend-mode: screen;
 }
 
+/* ============================================================
+   Soft-surface system — "lit from the void, not drawn with a ruler"
+   Unlayered classes: reliably win over stray Tailwind utilities.
+   ============================================================ */
+
+/* Primary container: gradient fill lit from the top edge, a hairline of
+   caught light along that edge, and a soft fall into the void beneath.
+   Replaces the old "flat bg + uniform 1px border + hard shadow" boxes. */
+.surface {
+  position: relative;
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(244, 242, 236, 0.035), rgba(244, 242, 236, 0) 42%),
+    #0d0d11;
+  box-shadow:
+    inset 0 1px 0 0 rgba(244, 242, 236, 0.07),
+    inset 0 0 0 1px rgba(244, 242, 236, 0.025),
+    0 32px 70px -34px rgba(0, 0, 0, 0.85);
+}
+
+/* Nested content areas — recede rather than re-box. No caught-light ring,
+   just a whisper of gradient over a slightly deeper fill. */
+.panel {
+  position: relative;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(244, 242, 236, 0.02), rgba(244, 242, 236, 0) 60%),
+    #101015;
+  box-shadow: inset 0 0 0 1px rgba(244, 242, 236, 0.03);
+}
+
+/* Interactive nested panel gets a faint accent lift on hover. */
+.panel-hover {
+  transition: box-shadow 0.35s ease, transform 0.35s ease;
+}
+.panel-hover:hover {
+  box-shadow:
+    inset 0 0 0 1px rgba(139, 125, 255, 0.22),
+    0 18px 40px -28px rgba(91, 75, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+/* The near-black "screen" surfaces (terminal, mode preview): keep the deep
+   ink well, but soften the frame to a caught-light ring + gentle depth. */
+.screen {
+  position: relative;
+  border-radius: 24px;
+  background: #050507;
+  box-shadow:
+    inset 0 1px 0 0 rgba(244, 242, 236, 0.05),
+    inset 0 0 0 1px rgba(244, 242, 236, 0.03),
+    0 40px 80px -40px rgba(0, 0, 0, 0.9);
+}
+
+/* A divider that emerges from and dissolves back into the void. */
+.hairline {
+  height: 1px;
+  border: 0;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(244, 242, 236, 0.11) 22%,
+    rgba(244, 242, 236, 0.11) 78%,
+    transparent
+  );
+}
+
+/* Same dissolving line, applied as a top/bottom edge on a padded block —
+   a drop-in for the old full-width `border-t/border-b border-line` rules. */
+.edge-top {
+  border-top: 1px solid transparent;
+  border-image: linear-gradient(
+      90deg,
+      transparent,
+      rgba(244, 242, 236, 0.1) 24%,
+      rgba(244, 242, 236, 0.1) 76%,
+      transparent
+    ) 1;
+}
+.edge-bottom {
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(
+      90deg,
+      transparent,
+      rgba(244, 242, 236, 0.1) 24%,
+      rgba(244, 242, 236, 0.1) 76%,
+      transparent
+    ) 1;
+}
+
+/* Ambient cosmos aura — a soft radial that makes a surface feel lit from
+   within the cosmos. Drifts almost imperceptibly. Purely decorative. */
+.aura {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.16;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  background: radial-gradient(circle, #5b4bff 0%, rgba(91, 75, 255, 0) 70%);
+  animation: aura-drift 22s ease-in-out infinite;
+}
+
+@keyframes aura-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.14; }
+  50% { transform: translate3d(3%, -4%, 0) scale(1.08); opacity: 0.2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura { animation: none; }
+  html { scroll-behavior: auto; }
+}
+
+/* Pill: eyebrow tags, badges. Soft gradient fill + caught-light ring instead
+   of a flat fill with a hard 1px stroke. */
+.pill {
+  background:
+    linear-gradient(180deg, rgba(244, 242, 236, 0.05), rgba(244, 242, 236, 0) 70%),
+    rgba(16, 16, 21, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(244, 242, 236, 0.06);
+}
+
+/* Ghost button: the quiet secondary action. Ring of caught light that warms
+   to cosmos on hover — no hard border snapping on/off. */
+.ghost {
+  background:
+    linear-gradient(180deg, rgba(244, 242, 236, 0.04), rgba(244, 242, 236, 0) 70%),
+    #0f0f14;
+  box-shadow: inset 0 0 0 1px rgba(244, 242, 236, 0.08);
+  transition: box-shadow 0.35s ease, transform 0.35s ease;
+}
+.ghost:hover {
+  box-shadow:
+    inset 0 0 0 1px rgba(139, 125, 255, 0.4),
+    0 20px 44px -30px rgba(91, 75, 255, 0.5);
+  transform: translateY(-1px);
+}
+

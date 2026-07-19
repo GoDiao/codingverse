@@ -56,7 +56,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
       </div>
 
       {/* Modes Toggle Navigation */}
-      <div className="flex flex-wrap justify-center gap-2 border-b border-line pb-px max-w-2xl mx-auto">
+      <div className="flex flex-wrap justify-center gap-2 edge-bottom pb-px max-w-2xl mx-auto">
         {(["pack", "search", "observe"] as const).map((tab) => {
           const isActive = activeTab === tab;
           let icon = <Layers className="w-4 h-4" />;
@@ -93,10 +93,11 @@ export default function ModesSection({ t }: ModesSectionProps) {
       </div>
 
       {/* Interactive Sandbox Container */}
-      <div className="bg-void-2/50 border border-line rounded-3xl overflow-hidden shadow-2xl relative grid grid-cols-1 lg:grid-cols-12">
-        
+      <div className="surface overflow-hidden relative grid grid-cols-1 lg:grid-cols-12">
+        <div className="aura" style={{ width: 420, height: 420, top: -120, left: '18%' }} />
+
         {/* Lefthand Configuration Controls */}
-        <div className="lg:col-span-4 p-8 border-r border-line bg-void-2/30 flex flex-col justify-between">
+        <div className="lg:col-span-4 p-8 flex flex-col justify-between relative z-10">
           <div className="space-y-6">
             <div className="flex items-center space-x-2.5">
               <span className="w-2 h-2 rounded-full bg-cosmos animate-pulse" />
@@ -122,7 +123,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                     {t.modes.packDesc}
                   </p>
 
-                  <div className="space-y-4 pt-4 border-t border-line">
+                  <div className="space-y-4 pt-4 edge-top">
                     <div className="flex items-center justify-between text-xs font-mono">
                       <span className="text-ink-faint">{t.modes.tokenBudget}</span>
                       <span className="text-cosmos-soft font-semibold">{budget.toLocaleString()} tokens</span>
@@ -145,7 +146,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                       />
                     </div>
 
-                    <div className="bg-void-3 p-3 rounded-xl border border-line text-xs font-mono space-y-1.5">
+                    <div className="panel p-3 text-xs font-mono space-y-1.5">
                       <div className="flex justify-between text-ink-dim">
                         <span>{t.modes.originalCodebase}</span>
                         <span>148,200 tokens</span>
@@ -176,17 +177,17 @@ export default function ModesSection({ t }: ModesSectionProps) {
                     {t.modes.searchDesc}
                   </p>
 
-                  <div className="space-y-4 pt-4 border-t border-line">
+                  <div className="space-y-4 pt-4 edge-top">
                     <span className="text-xs font-mono text-ink-faint block">{t.modes.chooseKeyword}</span>
                     <div className="grid grid-cols-3 gap-2">
                       {(["auth", "db", "parser"] as const).map((q) => (
                         <button
                           key={q}
                           onClick={() => setSearchQuery(q)}
-                          className={`py-2 px-3 rounded-xl font-mono text-xs border text-center transition-all cursor-pointer ${
+                          className={`py-2 px-3 rounded-xl font-mono text-xs text-center transition-all cursor-pointer ${
                             searchQuery === q
-                              ? "bg-cosmos/10 border-cosmos text-ink font-semibold"
-                              : "bg-void-3/50 border-line text-ink-dim hover:text-ink hover:border-ink-faint"
+                              ? "bg-cosmos/12 text-ink font-semibold shadow-[inset_0_0_0_1px_rgba(139,125,255,0.45)]"
+                              : "panel panel-hover text-ink-dim hover:text-ink"
                           }`}
                         >
                           cv search "{q}"
@@ -194,7 +195,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                       ))}
                     </div>
 
-                    <div className="bg-void-3 p-3 rounded-xl border border-line text-[11px] font-mono text-ink-dim space-y-1.5">
+                    <div className="panel p-3 text-[11px] font-mono text-ink-dim space-y-1.5">
                       <div className="flex items-center space-x-1 text-cosmos-soft font-semibold">
                         <Network className="w-3.5 h-3.5" />
                         <span>{t.modes.graphTraversal}</span>
@@ -222,7 +223,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                     {t.modes.observeDesc}
                   </p>
 
-                  <div className="space-y-3 pt-4 border-t border-line">
+                  <div className="space-y-3 pt-4 edge-top">
                     <span className="text-xs font-mono text-ink-faint block">{t.modes.selectBoard}</span>
                     <div className="space-y-2">
                       {[
@@ -251,19 +252,20 @@ export default function ModesSection({ t }: ModesSectionProps) {
             </AnimatePresence>
           </div>
 
-          <div className="pt-6 border-t border-line/60 flex items-center space-x-3 text-xs text-ink-faint font-mono">
+          <div className="pt-6 edge-top flex items-center space-x-3 text-xs text-ink-faint font-mono">
             <Cpu className="w-4 h-4 text-cosmos" />
             <span>Local SQLite engine · no network</span>
           </div>
         </div>
 
         {/* Righthand Visual Preview Screen */}
-        <div className="lg:col-span-8 p-8 bg-[#040406] flex flex-col justify-between relative min-h-[460px]">
+        <div className="lg:col-span-8 p-8 bg-[#050507]/60 flex flex-col justify-between relative min-h-[460px]">
           {/* Subtle cosmic mesh background */}
           <div className="absolute inset-0 bg-radial-gradient from-cosmos/5 via-transparent to-transparent pointer-events-none" />
 
           {/* Window Header */}
-          <div className="flex items-center justify-between mb-4 pb-4 border-b border-line relative z-10">
+          <div className="flex items-center justify-between mb-4 pb-4 relative z-10">
+            <div className="hairline absolute bottom-0 left-0" />
             <span className="text-xs font-mono text-ink-dim flex items-center space-x-1.5">
               <Database className="w-3.5 h-3.5 text-cosmos" />
               <span>{t.modes.visualizerLabel}</span>
@@ -286,7 +288,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                   transition={{ duration: 0.2 }}
                   className="font-mono text-xs space-y-3 w-full"
                 >
-                  <div className="bg-void-3 p-4 rounded-xl border border-line space-y-2">
+                  <div className="panel p-4 space-y-2">
                     <div className="text-ink-faint text-[10px]"># context.xml — Packed representation</div>
                     
                     {/* Critical Class - always full */}
@@ -314,7 +316,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                         </p>
                       </div>
                     ) : budget <= 69000 ? (
-                      <div className="border border-line bg-void-2/60 p-3 rounded-lg mt-3">
+                      <div className="panel p-3 rounded-lg mt-3">
                         <div className="text-amber-400 font-semibold flex items-center justify-between mb-1">
                           <span>&lt;file path="utils/helpers.ts" priority="medium" fidelity="skeleton"&gt;</span>
                           <span className="text-[10px] bg-amber-500/10 text-amber-300 px-1.5 rounded">Skeleton</span>
@@ -387,7 +389,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                   </div>
 
                   {/* Flow Walk Connector Line Visual */}
-                  <div className="bg-void-3 p-4 rounded-xl border border-line font-mono text-xs space-y-2 mt-4">
+                  <div className="panel p-4 font-mono text-xs space-y-2 mt-4">
                     <div className="text-cosmos-soft flex items-center space-x-1.5">
                       <Network className="w-3.5 h-3.5" />
                       <span>Retrieved Context Neighborhood XML Layout</span>
@@ -414,7 +416,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                   {activeBoard === 0 && (
                     <div className="space-y-3">
                       <div className="text-xs font-mono text-ink-dim">Token map (repository token treemap)</div>
-                      <div className="grid grid-cols-12 gap-1 bg-void-3 p-3 rounded-xl border border-line">
+                      <div className="grid grid-cols-12 gap-1 panel p-3">
                         {Array.from({ length: 96 }).map((_, i) => {
                           let opacity = "bg-cosmos/5";
                           if (i % 7 === 0) opacity = "bg-cosmos/80";
@@ -447,7 +449,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                   {activeBoard === 1 && (
                     <div className="space-y-3">
                       <div className="text-xs font-mono text-ink-dim">Code graph (D3 force-directed call graph)</div>
-                      <div className="bg-void-3/60 h-44 rounded-xl border border-line relative flex items-center justify-center overflow-hidden">
+                      <div className="panel h-44 relative flex items-center justify-center overflow-hidden">
                         {/* Interactive SVG Connectors */}
                         <svg className="absolute inset-0 w-full h-full opacity-60">
                           <line x1="100" y1="50" x2="200" y2="100" stroke="#5b4bff" strokeWidth="1" />
@@ -474,7 +476,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                   {activeBoard === 2 && (
                     <div className="space-y-3">
                       <div className="text-xs font-mono text-ink-dim">Retrieval Inspector (Query analysis log output)</div>
-                      <div className="bg-void-3 p-4 rounded-xl border border-line font-mono text-[11px] leading-relaxed space-y-1 text-ink-dim">
+                      <div className="panel p-4 font-mono text-[11px] leading-relaxed space-y-1 text-ink-dim">
                         <div className="text-emerald-400 font-semibold">[Inspect] Query "middleware" submitted</div>
                         <div>- Token budget set: 32k</div>
                         <div>- Resolved lexical BM25 matching context records: 3</div>
@@ -489,7 +491,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                     <div className="space-y-3">
                       <div className="text-xs font-mono text-ink-dim">Live Pack Configurator (Fidelity weights layout)</div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-void-3 p-3 rounded-xl border border-line font-mono text-xs">
+                        <div className="panel p-3 font-mono text-xs">
                           <div className="text-cosmos-soft font-semibold mb-2">High Priority</div>
                           <div className="space-y-1">
                             <div className="bg-void-2 p-1.5 rounded border border-line text-[10px] flex justify-between">
@@ -502,7 +504,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                             </div>
                           </div>
                         </div>
-                        <div className="bg-void-3 p-3 rounded-xl border border-line font-mono text-xs">
+                        <div className="panel p-3 font-mono text-xs">
                           <div className="text-amber-400 font-semibold mb-2">Auxiliary / Compressible</div>
                           <div className="space-y-1">
                             <div className="bg-void-2 p-1.5 rounded border border-line text-[10px] flex justify-between">
@@ -524,7 +526,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
           </div>
 
           {/* Window Footer Status */}
-          <div className="mt-6 pt-4 border-t border-line/60 flex items-center justify-between text-[10px] font-mono text-ink-faint relative z-10">
+          <div className="mt-6 pt-4 edge-top flex items-center justify-between text-[10px] font-mono text-ink-faint relative z-10">
             <span className="flex items-center space-x-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block mr-1 animate-pulse" />
               <span>{t.modes.indexLabel}</span>

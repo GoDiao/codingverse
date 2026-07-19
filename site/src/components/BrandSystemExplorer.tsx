@@ -44,9 +44,10 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
   const wordmarkRaw = `<span style="font-family: 'Fraunces', serif; font-weight: 500; letter-spacing: -0.04em;">codingverse</span>`;
 
   return (
-    <div id="brand-system-section" className="border border-line rounded-3xl bg-void-2/20 backdrop-blur-sm overflow-hidden shadow-2xl">
+    <div id="brand-system-section" className="surface backdrop-blur-sm overflow-hidden relative">
+      <div className="aura" style={{ width: 480, height: 480, top: -160, right: '12%' }} />
       {/* Brand Section Header */}
-      <div className="p-8 lg:p-12 border-b border-line space-y-4">
+      <div className="p-8 lg:p-12 edge-bottom space-y-4 relative z-10">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <h3 className="font-serif text-3xl lg:text-4xl text-ink tracking-tight font-medium">
@@ -103,7 +104,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
               className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"
             >
               <div className="lg:col-span-4 space-y-6">
-                <div className="bg-void-2 p-6 rounded-2xl border border-line flex flex-col items-center justify-center text-center space-y-4">
+                <div className="panel p-6 flex flex-col items-center justify-center text-center space-y-4">
                   <div className="text-xs font-mono text-ink-faint uppercase">Symbol (Monolith Monogram)</div>
                   {/* Monogram Monolith SVG */}
                   <div dangerouslySetInnerHTML={{ __html: svgLogoRaw }} className="hover:scale-105 transition-transform" />
@@ -128,7 +129,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
                   </button>
                 </div>
 
-                <div className="bg-void-2 p-6 rounded-2xl border border-line flex flex-col items-center justify-center text-center space-y-4">
+                <div className="panel p-6 flex flex-col items-center justify-center text-center space-y-4">
                   <div className="text-xs font-mono text-ink-faint uppercase">Wordmark Brand Typography</div>
                   <div className="text-3xl font-serif text-ink tracking-tight font-medium select-none">
                     codingverse
@@ -155,13 +156,13 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
                 </div>
               </div>
 
-              <div className="lg:col-span-8 bg-void-3/50 p-6 rounded-2xl border border-line space-y-4">
+              <div className="lg:col-span-8 panel p-6 space-y-4">
                 <h4 className="font-mono text-sm text-cosmos-soft font-semibold">Favicon & Asset Layout Schema</h4>
                 <p className="text-xs text-ink-dim leading-relaxed font-sans">
                   Use the monogram icon for avatars, favicons (16x16, 32x32, 192x192), and mobile launcher marks. The wordmark is preferred in navigation rails and page footers. Maintain a safety margin around the logo equal to 25% of its width/height boundaries.
                 </p>
 
-                <div className="pt-4 border-t border-line grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="pt-4 edge-top grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <span className="text-[10px] font-mono text-ink-faint uppercase">Logo SVG Properties</span>
                     <pre className="p-3 bg-void-3 rounded-xl text-[10px] font-mono text-[#dfded9] overflow-x-auto max-h-[140px]">
@@ -174,7 +175,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
                   </div>
                   <div className="space-y-2">
                     <span className="text-[10px] font-mono text-ink-faint uppercase">Brand Co-branding lockup</span>
-                    <div className="p-4 bg-void-2 rounded-xl flex items-center space-x-3 border border-line">
+                    <div className="panel p-4 rounded-xl flex items-center space-x-3">
                       <div dangerouslySetInnerHTML={{ __html: svgLogoRaw.replace('width="48"', 'width="32"').replace('height="48"', 'height="32"') }} />
                       <div className="h-6 w-px bg-line" />
                       <span className="font-serif font-medium text-lg text-ink">codingverse</span>
@@ -197,7 +198,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
                 {colors.map((color) => (
                   <div
                     key={color.name}
-                    className="bg-void-2 border border-line rounded-2xl overflow-hidden flex flex-col justify-between group shadow-lg"
+                    className="panel overflow-hidden flex flex-col justify-between group shadow-lg"
                   >
                     {/* Color Swatch Panel */}
                     <div
@@ -234,7 +235,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
                 ))}
               </div>
 
-              <div className="bg-void-3/50 p-6 rounded-2xl border border-line space-y-3 font-mono text-xs">
+              <div className="panel p-6 space-y-3 font-mono text-xs">
                 <h4 className="text-cosmos-soft font-bold">Accent Color Deployment Strategy (Restraint is King)</h4>
                 <p className="text-ink-dim leading-relaxed font-sans">
                   The primary background <span className="font-mono text-cosmos-soft">#0a0a0c</span> creates a massive cosmic void. The accent <span className="font-mono text-cosmos-soft">#5b4bff</span> (Cosmos) and <span className="font-mono text-cosmos-soft">#8b7dff</span> (Cosmos-Soft) must represent less than 5% of the total layout surface area. Use them strictly to highlight interactive elements, nodes, or critical CLI matching paths. Never use cosmic purple as general paragraph backgrounds or large block headers.
@@ -252,7 +253,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
               className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"
             >
               <div className="lg:col-span-5 space-y-6">
-                <div className="bg-void-2 p-6 rounded-2xl border border-line space-y-4">
+                <div className="panel p-6 space-y-4">
                   <h4 className="font-mono text-xs text-ink-faint uppercase">Typography Live Scale Tester</h4>
                   
                   <div className="space-y-2">
@@ -281,7 +282,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
                   </div>
                 </div>
 
-                <div className="bg-void-2 p-6 rounded-2xl border border-line space-y-4 font-mono text-xs">
+                <div className="panel p-6 space-y-4 font-mono text-xs">
                   <div className="text-xs font-mono text-ink-faint uppercase">The Three Font Pillars</div>
                   <div className="space-y-3">
                     <div className="border-l-2 border-cosmos pl-3">
@@ -300,7 +301,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
                 </div>
               </div>
 
-              <div className="lg:col-span-7 bg-void-3/40 p-6 rounded-2xl border border-line space-y-6">
+              <div className="lg:col-span-7 panel p-6 space-y-6">
                 <div className="space-y-1">
                   <span className="text-[10px] font-mono text-cosmos-soft uppercase tracking-wider font-bold">Fraunces Display Preview</span>
                   <div
@@ -311,18 +312,18 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
                   </div>
                 </div>
 
-                <div className="pt-6 border-t border-line space-y-2">
+                <div className="pt-6 edge-top space-y-2">
                   <span className="text-[10px] font-mono text-ink-faint uppercase">Example Hierarchy</span>
                   <div className="space-y-3 font-mono text-xs">
-                    <div className="flex items-center justify-between text-[11px] text-ink-faint border-b border-line/30 pb-1">
+                    <div className="flex items-center justify-between text-[11px] text-ink-faint edge-bottom pb-1">
                       <span>Tag / Eyebrow</span>
                       <span>JetBrains Mono SemiBold • Tracking Wide</span>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-ink-faint border-b border-line/30 pb-1">
+                    <div className="flex items-center justify-between text-[11px] text-ink-faint edge-bottom pb-1">
                       <span>Display Heading</span>
                       <span>Fraunces Regular/Medium • Tracking Tight</span>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-ink-faint border-b border-line/30 pb-1">
+                    <div className="flex items-center justify-between text-[11px] text-ink-faint edge-bottom pb-1">
                       <span>Body Paragraph</span>
                       <span>Inter Light/Regular • Tracking Normal • Leading Relaxed</span>
                     </div>
@@ -341,7 +342,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
               className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start"
             >
               {/* Button library */}
-              <div className="bg-void-2 p-6 rounded-2xl border border-line space-y-4">
+              <div className="panel p-6 space-y-4">
                 <h4 className="font-mono text-xs text-ink-faint uppercase">Buttons & Controls</h4>
                 
                 <div className="space-y-3">
@@ -365,7 +366,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
               </div>
 
               {/* Pills and badges */}
-              <div className="bg-void-2 p-6 rounded-2xl border border-line space-y-4">
+              <div className="panel p-6 space-y-4">
                 <h4 className="font-mono text-xs text-ink-faint uppercase">Pills & Status Badges</h4>
                 
                 <div className="space-y-4">
@@ -389,11 +390,11 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
               </div>
 
               {/* Code outline block card */}
-              <div className="bg-void-2 p-6 rounded-2xl border border-line space-y-4 md:col-span-2">
+              <div className="panel p-6 space-y-4 md:col-span-2">
                 <h4 className="font-mono text-xs text-ink-faint uppercase">Card & Monolith Container Pattern</h4>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-6 rounded-2xl bg-void-3/40 border border-line hover:border-cosmos/30 hover:bg-void-3/60 transition-all space-y-3 cursor-pointer">
+                  <div className="panel panel-hover p-6 space-y-3 cursor-pointer">
                     <span className="w-6 h-6 rounded-full bg-cosmos/10 text-cosmos-soft flex items-center justify-center font-mono text-xs font-semibold">01</span>
                     <h5 className="font-serif text-lg text-ink font-semibold">Subtle Outline Card</h5>
                     <p className="text-xs text-ink-dim leading-relaxed">
@@ -401,7 +402,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
                     </p>
                   </div>
 
-                  <div className="p-6 rounded-2xl bg-void-3/40 border border-line hover:border-cosmos/30 hover:bg-void-3/60 transition-all space-y-3 cursor-pointer">
+                  <div className="panel panel-hover p-6 space-y-3 cursor-pointer">
                     <span className="w-6 h-6 rounded-full bg-cosmos/10 text-cosmos-soft flex items-center justify-center font-mono text-xs font-semibold">02</span>
                     <h5 className="font-serif text-lg text-ink font-semibold">Staggered Rhythm</h5>
                     <p className="text-xs text-ink-dim leading-relaxed">
@@ -409,7 +410,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
                     </p>
                   </div>
 
-                  <div className="p-6 rounded-2xl bg-void-2 border border-line hover:border-cosmos/30 hover:bg-void-3/60 transition-all space-y-3 cursor-pointer relative overflow-hidden">
+                  <div className="panel panel-hover p-6 space-y-3 cursor-pointer relative overflow-hidden">
                     <div className="absolute top-0 right-0 h-16 w-16 bg-gradient-to-bl from-cosmos/10 via-transparent to-transparent" />
                     <span className="w-6 h-6 rounded-full bg-cosmos/10 text-cosmos-soft flex items-center justify-center font-mono text-xs font-semibold">03</span>
                     <h5 className="font-serif text-lg text-ink font-semibold">Cosmic Highlight</h5>
@@ -454,7 +455,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
               ].map((p, idx) => (
                 <div
                   key={idx}
-                  className="bg-void-2 border border-line p-6 rounded-2xl flex flex-col justify-between space-y-4 shadow-lg hover:border-cosmos/20 transition-all"
+                  className="panel p-6 flex flex-col justify-between space-y-4 shadow-lg hover:border-cosmos/20 transition-all"
                 >
                   <div className="space-y-2">
                     <span className="text-[10px] font-mono text-cosmos-soft tracking-widest uppercase font-semibold">
@@ -463,7 +464,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
                     <h5 className="font-serif text-lg text-ink font-semibold">{p.title}</h5>
                     <p className="text-xs text-ink-dim leading-relaxed font-sans">{p.desc}</p>
                   </div>
-                  <div className="text-[10px] font-mono text-ink-faint flex items-center justify-between pt-4 border-t border-line/30">
+                  <div className="text-[10px] font-mono text-ink-faint flex items-center justify-between pt-4 edge-top">
                     <span>{t.brandExplorer.guidelineMode}</span>
                     <span className="text-ink-dim font-bold uppercase">{p.keyword}</span>
                   </div>

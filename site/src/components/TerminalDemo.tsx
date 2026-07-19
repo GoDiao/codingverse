@@ -129,10 +129,10 @@ export default function TerminalDemo({ t }: TerminalDemoProps) {
               <button
                 key={cmd.id}
                 onClick={() => setActiveCommand(idx)}
-                className={`w-full text-left p-4 rounded-xl border transition-all duration-300 group flex items-start justify-between cursor-pointer ${
+                className={`w-full text-left p-4 rounded-2xl transition-all duration-300 group flex items-start justify-between cursor-pointer ${
                   isActive
-                    ? "bg-void-2 border-cosmos/40 text-ink shadow-lg shadow-cosmos/5"
-                    : "bg-transparent border-line hover:border-ink-faint hover:bg-void-2/30 text-ink-dim"
+                    ? "text-ink shadow-[inset_0_0_0_1px_rgba(139,125,255,0.4),0_20px_44px_-30px_rgba(91,75,255,0.55)] bg-cosmos/[0.06]"
+                    : "panel panel-hover text-ink-dim"
                 }`}
               >
                 <div className="space-y-1 font-mono text-xs w-full pr-4">
@@ -161,7 +161,7 @@ export default function TerminalDemo({ t }: TerminalDemoProps) {
         <div className="pt-4">
           <button
             onClick={handleCopy}
-            className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl border border-line bg-void-2 text-xs font-mono tracking-wide uppercase hover:bg-void-3 hover:border-cosmos-soft/40 transition-all text-ink cursor-pointer"
+            className="panel panel-hover w-full flex items-center justify-center space-x-2 py-3 px-4 text-xs font-mono tracking-wide uppercase transition-all text-ink cursor-pointer"
           >
             {copied ? (
               <>
@@ -180,9 +180,9 @@ export default function TerminalDemo({ t }: TerminalDemoProps) {
 
       {/* Output screen on the right */}
       <div className="lg:col-span-7 flex flex-col">
-        <div className="flex-1 bg-[#050507] border border-line rounded-2xl flex flex-col overflow-hidden relative shadow-2xl">
+        <div className="screen flex-1 flex flex-col overflow-hidden relative">
           {/* Terminal Title Bar */}
-          <div className="bg-void-3 px-5 py-3.5 border-b border-line flex items-center justify-between">
+          <div className="px-5 py-3.5 edge-bottom flex items-center justify-between bg-[#0b0b0f]/60">
             <div className="flex items-center space-x-2">
               <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
               <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
@@ -218,7 +218,7 @@ export default function TerminalDemo({ t }: TerminalDemoProps) {
           </div>
 
           {/* Terminal Bottom Hint */}
-          <div className="bg-void-2/60 border-t border-line/50 px-5 py-2.5 text-[10px] font-mono text-ink-faint flex justify-between">
+          <div className="bg-void-2/60 edge-top px-5 py-2.5 text-[10px] font-mono text-ink-faint flex justify-between">
             <span>SQLite Local Context DB: .codingverse/index.db</span>
             <span>ANSI UTF-8</span>
           </div>

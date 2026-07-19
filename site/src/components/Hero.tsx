@@ -21,7 +21,7 @@ export default function Hero({ t }: HeroProps) {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full border border-line bg-void-2/60 text-xs font-mono text-ink-dim tracking-wider"
+          className="pill inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full text-xs font-mono text-ink-dim tracking-wider"
         >
           <span className="w-2 h-2 rounded-full bg-cosmos animate-pulse" />
           <span>{t.hero.eyebrow}</span>
@@ -75,7 +75,7 @@ export default function Hero({ t }: HeroProps) {
             href="https://github.com/GoDiao/codingverse"
             target="_blank"
             rel="noreferrer"
-            className="w-full sm:w-auto px-8 py-4 rounded-full border border-line bg-void-2 hover:border-ink hover:bg-void-3 text-ink font-sans font-semibold tracking-wide transition-all text-center cursor-pointer"
+            className="ghost w-full sm:w-auto px-8 py-4 rounded-full text-ink font-sans font-semibold tracking-wide text-center cursor-pointer"
           >
             {t.hero.secondaryCta}
           </a>
@@ -99,7 +99,7 @@ export default function Hero({ t }: HeroProps) {
         transition={{ duration: 1, delay: 0.6 }}
         className="mt-16 w-full max-w-xl mx-auto relative px-4"
       >
-        <div className="bg-void-2/35 border border-line rounded-2xl p-6 relative">
+        <div className="panel p-6 relative">
           {/* Central Repository Monolith */}
           <div className="flex flex-col items-center space-y-2 mb-10 relative z-10">
             <div className="w-16 h-16 rounded-xl bg-void-3 border border-cosmos/30 flex items-center justify-center shadow-lg shadow-cosmos/10 relative group">
@@ -115,7 +115,7 @@ export default function Hero({ t }: HeroProps) {
           <div className="grid grid-cols-3 gap-4 relative z-10">
             {/* pack path */}
             <div className="flex flex-col items-center text-center space-y-2 group cursor-pointer">
-              <div className="w-11 h-11 rounded-full bg-void-3 border border-line group-hover:border-cosmos/50 flex items-center justify-center transition-colors">
+              <div className="w-11 h-11 rounded-full panel panel-hover group-hover:shadow-[inset_0_0_0_1px_rgba(139,125,255,0.4)] flex items-center justify-center transition-colors">
                 <Layers className="w-5 h-5 text-ink-dim group-hover:text-ink" />
               </div>
               <span className="text-[11px] font-mono text-ink-dim uppercase">pack</span>
@@ -124,7 +124,7 @@ export default function Hero({ t }: HeroProps) {
 
             {/* search path */}
             <div className="flex flex-col items-center text-center space-y-2 group cursor-pointer">
-              <div className="w-11 h-11 rounded-full bg-void-3 border border-line group-hover:border-cosmos/50 flex items-center justify-center transition-colors">
+              <div className="w-11 h-11 rounded-full panel panel-hover group-hover:shadow-[inset_0_0_0_1px_rgba(139,125,255,0.4)] flex items-center justify-center transition-colors">
                 <Search className="w-5 h-5 text-ink-dim group-hover:text-ink" />
               </div>
               <span className="text-[11px] font-mono text-ink-dim uppercase">search</span>
@@ -133,7 +133,7 @@ export default function Hero({ t }: HeroProps) {
 
             {/* observe path */}
             <div className="flex flex-col items-center text-center space-y-2 group cursor-pointer">
-              <div className="w-11 h-11 rounded-full bg-void-3 border border-line group-hover:border-cosmos/50 flex items-center justify-center transition-colors">
+              <div className="w-11 h-11 rounded-full panel panel-hover group-hover:shadow-[inset_0_0_0_1px_rgba(139,125,255,0.4)] flex items-center justify-center transition-colors">
                 <Eye className="w-5 h-5 text-ink-dim group-hover:text-ink" />
               </div>
               <span className="text-[11px] font-mono text-ink-dim uppercase">observe</span>

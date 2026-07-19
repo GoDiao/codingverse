@@ -7,14 +7,14 @@ interface FooterProps {
 
 export default function Footer({ t }: FooterProps) {
   return (
-    <footer className="border-t border-line bg-void-2/30 pt-16 pb-12 px-6">
+    <footer className="edge-top bg-gradient-to-b from-void-2/40 to-transparent pt-16 pb-12 px-6">
       <div className="max-w-7xl mx-auto space-y-12">
         {/* Brand Main Grid */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
           {/* Logo & Tagline */}
           <div className="md:col-span-5 space-y-4">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-lg bg-void-3 border border-line flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg panel flex items-center justify-center">
                 <svg width="20" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M24 10L14 16V32L24 38L34 32V16L24 10Z" fill="#0a0a0c" stroke="#5b4bff" strokeWidth="3"/>
                   <circle cx="24" cy="24" r="4.5" fill="#8b7dff" stroke="#0a0a0c" strokeWidth="2"/>
@@ -93,7 +93,7 @@ export default function Footer({ t }: FooterProps) {
         </div>
 
         {/* Bottom copyright & credits bar */}
-        <div className="pt-8 border-t border-line/50 flex flex-col sm:flex-row justify-between items-center gap-4 text-[10px] font-mono text-ink-faint">
+        <div className="pt-8 edge-top flex flex-col sm:flex-row justify-between items-center gap-4 text-[10px] font-mono text-ink-faint">
           <div>{t.footer.copyright}</div>
           <div className="flex items-center space-x-1">
             <span>{t.footer.craftedWith}</span>
