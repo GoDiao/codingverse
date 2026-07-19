@@ -5,7 +5,7 @@ import { Engine } from "@codingverse/core";
 export function registerSearch(program: Command): void {
   program
     .command("search")
-    .description("Hybrid search over the index (BM25 + co-location graph, fused via RRF)")
+    .description("Hybrid search over the index (BM25 + call graph, fused via RRF)")
     .argument("<query>", "natural language or symbol query")
     .argument("[path]", "repository path", ".")
     .option("-k, --top-k <n>", "number of hits to return", "20")

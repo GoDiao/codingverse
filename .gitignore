@@ -6,8 +6,9 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# Reference repos (research assets, not part of the codebase)
+# Reference repos + internal research/design notes (not part of the codebase)
 _reference/
+_research/
 
 # codingverse index / cache
 .codingverse/
