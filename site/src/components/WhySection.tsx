@@ -15,7 +15,7 @@ export default function WhySection({ t }: WhySectionProps) {
       visual: (
         <div className="h-28 bg-void-3 rounded-xl border border-line p-3 flex flex-col justify-between font-mono text-[10px]">
           <div className="flex justify-between border-b border-line pb-1.5 text-ink-faint">
-            <span>Fidelity Compression</span>
+            <span>{t.why.v1Label}</span>
             <span className="text-emerald-400">XML Outline</span>
           </div>
           <div className="space-y-1 text-ink-dim">
@@ -45,7 +45,7 @@ export default function WhySection({ t }: WhySectionProps) {
       visual: (
         <div className="h-28 bg-void-3 rounded-xl border border-line p-3.5 flex flex-col justify-between font-mono text-[10px]">
           <div className="text-ink-faint border-b border-line pb-1.5 flex items-center justify-between">
-            <span>Impact Radius Scope</span>
+            <span>{t.why.v2Label}</span>
             <span>r = 1 hop</span>
           </div>
           <div className="flex items-center justify-center space-x-2 mt-2">
@@ -73,7 +73,7 @@ export default function WhySection({ t }: WhySectionProps) {
       icon: <Network className="w-5 h-5 text-cosmos-soft" />,
       visual: (
         <div className="h-28 bg-void-3 rounded-xl border border-line p-3 flex flex-col justify-between font-mono text-[10px] relative overflow-hidden">
-          <div className="text-ink-faint border-b border-line pb-1.5">Resolved AST Call Graph Walk</div>
+          <div className="text-ink-faint border-b border-line pb-1.5">{t.why.v3Label}</div>
           <div className="flex items-center justify-center h-full relative">
             {/* SVG Call Graph link overlay */}
             <svg className="absolute inset-0 w-full h-full opacity-40">
@@ -96,7 +96,7 @@ export default function WhySection({ t }: WhySectionProps) {
       icon: <HardDrive className="w-5 h-5 text-cosmos-soft" />,
       visual: (
         <div className="h-28 bg-void-3 rounded-xl border border-line p-3.5 flex flex-col justify-between font-mono text-[10px]">
-          <div className="text-ink-faint border-b border-line pb-1.5">Local SQLite File Database</div>
+          <div className="text-ink-faint border-b border-line pb-1.5">{t.why.v4Label}</div>
           <div className="flex justify-between items-center bg-void-2/60 p-2 rounded-lg border border-line/50">
             <span className="text-cosmos-soft font-semibold">.codingverse/index.db</span>
             <span className="text-[9px] text-ink-faint">SQLite3</span>
@@ -119,7 +119,7 @@ export default function WhySection({ t }: WhySectionProps) {
       <div className="text-center space-y-4 max-w-3xl mx-auto">
         <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full border border-line bg-void-2/60 text-xs font-mono text-ink-dim uppercase tracking-widest">
           <Shield className="w-3.5 h-3.5 text-cosmos-soft" />
-          <span>Technical Architecture</span>
+          <span>{t.why.eyebrow}</span>
         </div>
         <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-ink tracking-tight font-medium">
           {t.why.title}

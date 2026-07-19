@@ -35,7 +35,7 @@ export default function Footer({ t }: FooterProps) {
           {/* Links columns */}
           <div className="md:col-span-6 grid grid-cols-2 sm:grid-cols-3 gap-6 font-mono text-xs uppercase tracking-wider font-semibold">
             <div className="space-y-3">
-              <span className="text-[10px] text-ink-faint">Open Source</span>
+              <span className="text-[10px] text-ink-faint">{t.footer.openSource}</span>
               <ul className="space-y-2">
                 <li>
                   <a
@@ -50,7 +50,7 @@ export default function Footer({ t }: FooterProps) {
                 </li>
                 <li>
                   <a
-                    href="https://github.com/GoDiao/codingverse/blob/main/LICENSE"
+                    href="https://github.com/GoDiao/codingverse/blob/master/LICENSE"
                     target="_blank"
                     rel="noreferrer"
                     className="text-ink-dim hover:text-ink transition-colors flex items-center space-x-1"
@@ -63,28 +63,28 @@ export default function Footer({ t }: FooterProps) {
             </div>
 
             <div className="space-y-3">
-              <span className="text-[10px] text-ink-faint">Documentation</span>
+              <span className="text-[10px] text-ink-faint">{t.footer.documentation}</span>
               <ul className="space-y-2 font-semibold">
                 <li>
                   <a
-                    href="https://github.com/GoDiao/codingverse/blob/main/docs/architecture.md"
+                    href="https://github.com/GoDiao/codingverse/blob/master/docs/architecture.md"
                     target="_blank"
                     rel="noreferrer"
                     className="text-ink-dim hover:text-ink transition-colors flex items-center space-x-1"
                   >
                     <BookOpen className="w-3.5 h-3.5 mr-1" />
-                    <span>Architecture</span>
+                    <span>{t.footer.links.architecture}</span>
                   </a>
                 </li>
                 <li>
                   <a
-                    href="https://github.com/GoDiao/codingverse/blob/main/docs/cli-reference.md"
+                    href="https://github.com/GoDiao/codingverse/blob/master/docs/cli-reference.md"
                     target="_blank"
                     rel="noreferrer"
                     className="text-ink-dim hover:text-ink transition-colors flex items-center space-x-1"
                   >
                     <Terminal className="w-3.5 h-3.5 mr-1" />
-                    <span>CLI Reference</span>
+                    <span>{t.footer.links.cli}</span>
                   </a>
                 </li>
               </ul>
@@ -94,13 +94,11 @@ export default function Footer({ t }: FooterProps) {
 
         {/* Bottom copyright & credits bar */}
         <div className="pt-8 border-t border-line/50 flex flex-col sm:flex-row justify-between items-center gap-4 text-[10px] font-mono text-ink-faint">
-          <div>
-            &copy; 2026 godiao &bull; Released under the MIT License
-          </div>
+          <div>{t.footer.copyright}</div>
           <div className="flex items-center space-x-1">
-            <span>Crafted with</span>
+            <span>{t.footer.craftedWith}</span>
             <Heart className="w-3 h-3 text-cosmos fill-current" />
-            <span>in Monolith Void</span>
+            <span>{t.footer.craftedPlace}</span>
           </div>
         </div>
       </div>

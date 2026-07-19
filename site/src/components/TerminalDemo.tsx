@@ -112,7 +112,7 @@ export default function TerminalDemo({ t }: TerminalDemoProps) {
         <div className="space-y-3">
           <div className="flex items-center space-x-2 text-xs font-mono tracking-widest uppercase text-cosmos-soft">
             <Terminal className="w-4 h-4" />
-            <span>Interactive CLI Walkthrough</span>
+            <span>{t.getStarted.walkthrough}</span>
           </div>
           <h3 className="font-serif text-2xl lg:text-3xl text-ink tracking-tight">
             {t.getStarted.title}

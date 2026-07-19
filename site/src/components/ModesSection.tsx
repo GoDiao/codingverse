@@ -101,7 +101,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
             <div className="flex items-center space-x-2.5">
               <span className="w-2 h-2 rounded-full bg-cosmos animate-pulse" />
               <span className="font-mono text-xs text-cosmos-soft tracking-wider uppercase">
-                Interactive Playground
+                {t.modes.playground}
               </span>
             </div>
 
@@ -124,15 +124,15 @@ export default function ModesSection({ t }: ModesSectionProps) {
 
                   <div className="space-y-4 pt-4 border-t border-line">
                     <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="text-ink-faint">LLM Token Budget</span>
+                      <span className="text-ink-faint">{t.modes.tokenBudget}</span>
                       <span className="text-cosmos-soft font-semibold">{budget.toLocaleString()} tokens</span>
                     </div>
 
                     <div className="space-y-2">
                       <div className="flex justify-between text-[11px] font-mono text-ink-faint">
-                        <span>10k (Aggressive)</span>
-                        <span>32k (Balanced)</span>
-                        <span>128k (Max)</span>
+                        <span>{t.modes.budgetAggressive}</span>
+                        <span>{t.modes.budgetBalanced}</span>
+                        <span>{t.modes.budgetMax}</span>
                       </div>
                       <input
                         type="range"
@@ -147,11 +147,11 @@ export default function ModesSection({ t }: ModesSectionProps) {
 
                     <div className="bg-void-3 p-3 rounded-xl border border-line text-xs font-mono space-y-1.5">
                       <div className="flex justify-between text-ink-dim">
-                        <span>Original codebase:</span>
+                        <span>{t.modes.originalCodebase}</span>
                         <span>148,200 tokens</span>
                       </div>
                       <div className="flex justify-between font-bold text-ink">
-                        <span>Output context:</span>
+                        <span>{t.modes.outputContext}</span>
                         <span className={budget <= 10000 ? "text-cosmos-soft" : "text-emerald-400"}>
                           {budget <= 10000 ? "~9,540 tokens" : budget <= 69000 ? "~24,190 tokens" : "~122,800 tokens"}
                         </span>
@@ -177,7 +177,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                   </p>
 
                   <div className="space-y-4 pt-4 border-t border-line">
-                    <span className="text-xs font-mono text-ink-faint block">Choose a semantic keyword:</span>
+                    <span className="text-xs font-mono text-ink-faint block">{t.modes.chooseKeyword}</span>
                     <div className="grid grid-cols-3 gap-2">
                       {(["auth", "db", "parser"] as const).map((q) => (
                         <button
@@ -197,10 +197,10 @@ export default function ModesSection({ t }: ModesSectionProps) {
                     <div className="bg-void-3 p-3 rounded-xl border border-line text-[11px] font-mono text-ink-dim space-y-1.5">
                       <div className="flex items-center space-x-1 text-cosmos-soft font-semibold">
                         <Network className="w-3.5 h-3.5" />
-                        <span>Call Graph Traversal:</span>
+                        <span>{t.modes.graphTraversal}</span>
                       </div>
                       <p className="text-[10px] leading-relaxed text-ink-faint">
-                        BM25 lexical index finds direct code hits, then walks parent/child branches, carrying real execution context nodes.
+                        {t.modes.graphTraversalDesc}
                       </p>
                     </div>
                   </div>
@@ -223,13 +223,13 @@ export default function ModesSection({ t }: ModesSectionProps) {
                   </p>
 
                   <div className="space-y-3 pt-4 border-t border-line">
-                    <span className="text-xs font-mono text-ink-faint block">Select Board to inspect:</span>
+                    <span className="text-xs font-mono text-ink-faint block">{t.modes.selectBoard}</span>
                     <div className="space-y-2">
                       {[
-                        "Token map (treemap)",
-                        "Code graph (call graph)",
-                        "Retrieval inspector",
-                        "Pack preview",
+                        t.modes.boardTokenMap,
+                        t.modes.boardCodeGraph,
+                        t.modes.boardRetrieval,
+                        t.modes.boardPack,
                       ].map((board, idx) => (
                         <button
                           key={idx}
@@ -267,6 +267,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
             <span className="text-xs font-mono text-ink-dim flex items-center space-x-1.5">
               <Database className="w-3.5 h-3.5 text-cosmos" />
               <span>{t.modes.visualizerLabel}</span>
+
             </span>
             <span className="px-2 py-0.5 rounded bg-void-3 border border-line text-[10px] font-mono text-cosmos-soft uppercase tracking-wider">
               {activeTab} mode

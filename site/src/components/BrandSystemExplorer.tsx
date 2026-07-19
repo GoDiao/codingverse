@@ -66,7 +66,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
         {/* Inner sub-tabs */}
         <div className="flex flex-wrap gap-2 pt-6">
           {[
-            { id: "logo", label: "Logo & Wordmark", icon: <Box className="w-4 h-4" /> },
+            { id: "logo", label: t.brandExplorer.logo, icon: <Box className="w-4 h-4" /> },
             { id: "colors", label: t.brandExplorer.colors, icon: <Palette className="w-4 h-4" /> },
             { id: "typography", label: t.brandExplorer.typography, icon: <Type className="w-4 h-4" /> },
             { id: "components", label: t.brandExplorer.components, icon: <Layers className="w-4 h-4" /> },
@@ -432,24 +432,24 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
             >
               {[
                 {
-                  title: "Architectural Honesty",
-                  desc: "Avoid fake telemetry lines, mock port indicators, or simulated server terminal noises. Present real, precise, unembellished commands and outcomes.",
-                  keyword: "Honest",
+                  title: t.brandExplorer.principleItems.t1,
+                  desc: t.brandExplorer.principleItems.d1,
+                  keyword: t.brandExplorer.principleItems.k1,
                 },
                 {
-                  title: "Luxury via Whitespace",
-                  desc: "Vast negative space establishes quiet confidence. Give headers, paragraphs, and sections ample margins (100-160px) to breathe deeply.",
-                  keyword: "Spacious",
+                  title: t.brandExplorer.principleItems.t2,
+                  desc: t.brandExplorer.principleItems.d2,
+                  keyword: t.brandExplorer.principleItems.k2,
                 },
                 {
-                  title: "The Precious Accent",
-                  desc: "Limit cosmic violet highlights to less than 5% area weight. Restraint makes accent colors feel incredibly precious and functional.",
-                  keyword: "Restrained",
+                  title: t.brandExplorer.principleItems.t3,
+                  desc: t.brandExplorer.principleItems.d3,
+                  keyword: t.brandExplorer.principleItems.k3,
                 },
                 {
-                  title: "Editorial Grandeur",
-                  desc: "Oversized, elegant display serifs like Fraunces project premium intent and scale, replacing heavy images or busy icons.",
-                  keyword: "Grand",
+                  title: t.brandExplorer.principleItems.t4,
+                  desc: t.brandExplorer.principleItems.d4,
+                  keyword: t.brandExplorer.principleItems.k4,
                 },
               ].map((p, idx) => (
                 <div
@@ -464,7 +464,7 @@ export default function BrandSystemExplorer({ t }: BrandSystemExplorerProps) {
                     <p className="text-xs text-ink-dim leading-relaxed font-sans">{p.desc}</p>
                   </div>
                   <div className="text-[10px] font-mono text-ink-faint flex items-center justify-between pt-4 border-t border-line/30">
-                    <span>Guideline Mode</span>
+                    <span>{t.brandExplorer.guidelineMode}</span>
                     <span className="text-ink-dim font-bold uppercase">{p.keyword}</span>
                   </div>
                 </div>

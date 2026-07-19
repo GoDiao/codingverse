@@ -55,7 +55,7 @@ export default function Navbar({ currentLang, toggleLang, t }: NavbarProps) {
           <button
             onClick={toggleLang}
             className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-line bg-void-2/60 hover:border-ink hover:bg-void-3 text-[11px] font-mono transition-all text-ink cursor-pointer"
-            title="Switch Language"
+            title={t.nav.switchLang}
           >
             <Globe className="w-3.5 h-3.5 text-cosmos-soft" />
             <span>{currentLang === "en" ? "中文" : "English"}</span>
@@ -69,7 +69,7 @@ export default function Navbar({ currentLang, toggleLang, t }: NavbarProps) {
             className="flex items-center space-x-1.5 px-4 py-2 rounded-full bg-void-3 border border-line text-xs font-mono tracking-wide uppercase hover:bg-void-2 hover:border-cosmos/30 transition-all text-ink cursor-pointer"
           >
             <Github className="w-3.5 h-3.5" />
-            <span>Star</span>
+            <span>{t.nav.star}</span>
           </a>
         </div>
 

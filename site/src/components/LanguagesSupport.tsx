@@ -95,7 +95,7 @@ export default function LanguagesSupport({ t }: LanguagesSupportProps) {
         <div className="space-y-4">
           <div className="inline-flex items-center space-x-2 text-xs font-mono tracking-widest uppercase text-cosmos-soft">
             <Code className="w-4 h-4" />
-            <span>AST Language Registries</span>
+            <span>{t.languages.eyebrow}</span>
           </div>
           <h3 className="font-serif text-2xl lg:text-3xl text-ink tracking-tight font-semibold">
             {t.languages.title}
@@ -136,7 +136,7 @@ export default function LanguagesSupport({ t }: LanguagesSupportProps) {
             rel="noreferrer"
             className="inline-flex items-center space-x-1 text-xs text-cosmos-soft hover:text-ink transition-colors font-semibold font-mono"
           >
-            <span>Learn how to register custom languages</span>
+            <span>{t.languages.registerLink}</span>
             <ExternalLink className="w-3 h-3" />
           </a>
         </div>
@@ -154,7 +154,7 @@ export default function LanguagesSupport({ t }: LanguagesSupportProps) {
                 <span>queries/{selectedLang.toLowerCase()}.scm</span>
               </span>
               <span className="text-[10px] bg-void-3 border border-line px-2 py-0.5 rounded text-ink-faint font-mono">
-                Tree-sitter AST ASTQuery
+                {t.languages.queryBadge}
               </span>
             </div>
 
@@ -165,7 +165,7 @@ export default function LanguagesSupport({ t }: LanguagesSupportProps) {
           </div>
 
           <div className="pt-3 border-t border-line/50 text-[10px] font-mono text-ink-faint">
-            Symbol extraction walks pattern trees matched by queries.
+            {t.languages.extractionNote}
           </div>
         </div>
       </div>
