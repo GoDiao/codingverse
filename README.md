@@ -4,6 +4,8 @@
 
 > A unified Code RAG toolkit — **index once, three-mode output: pack / search / observe.**
 
+**[→ codingverse.github.io landing page](https://godiao.github.io/codingverse/)**
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](https://nodejs.org)
 [![Tests](https://img.shields.io/badge/tests-233%20passing-success.svg)](#development)

@@ -4,6 +4,8 @@
 
 > 统一的 Code RAG 工具箱 —— **一次建索引,三种出口:打包 / 检索 / 观测。**
 
+**[→ 官方展示页 godiao.github.io/codingverse](https://godiao.github.io/codingverse/)**
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](https://nodejs.org)
 [![Tests](https://img.shields.io/badge/tests-233%20passing-success.svg)](#开发)
