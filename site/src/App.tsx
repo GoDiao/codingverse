@@ -8,7 +8,6 @@ import ModesSection from "./components/ModesSection";
 import WhySection from "./components/WhySection";
 import TerminalDemo from "./components/TerminalDemo";
 import LanguagesSupport from "./components/LanguagesSupport";
-import BrandSystemExplorer from "./components/BrandSystemExplorer";
 import Footer from "./components/Footer";
 import StarfieldBackground from "./components/StarfieldBackground";
 
@@ -71,11 +70,6 @@ export default function App() {
         {/* 7. Languages AST registries support Section */}
         <section className="pt-8">
           <LanguagesSupport t={t} />
-        </section>
-
-        {/* 8. Reusable Brand Visual System Sandbox Section */}
-        <section className="pt-8">
-          <BrandSystemExplorer t={t} />
         </section>
 
       </main>

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Terminal, Play, Check, Copy } from "lucide-react";
+import { Play, Check, Copy } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { TranslationSchema } from "../translations";
+import { terminal, searches } from "../data/realData";
 
 interface TerminalDemoProps {
   t: TranslationSchema;
@@ -12,87 +13,11 @@ export default function TerminalDemo({ t }: TerminalDemoProps) {
   const [copied, setCopied] = useState(false);
 
   const commands = [
-    {
-      id: 0,
-      code: "cv index ./my-repo",
-      comment: t.getStarted.comments.c1,
-      output: `[cv] Scanning files at ./my-repo
-[cv] Found 348 source files
-[cv] Parsing files: TS (142), JS (67), PY (88), GO (51)
-[cv] ████████████████████████████████ 100% 
-[cv] Success: Built SQLite local index at .codingverse/index.db
-[cv] Saved records:
-  └─ 348 files
-  └─ 8,419 syntax nodes (symbols)
-  └─ 12,893 call graph edges (caller ⇄ callee)
-  └─ 15,204 markdown/code chunks`,
-    },
-    {
-      id: 1,
-      code: "cv rank ./my-repo",
-      comment: t.getStarted.comments.c2,
-      output: `[cv] Initializing pagerank over 12,893 resolved edges...
-[cv] Convergence reached in 12 iterations.
-[cv] 
-[cv] Top 5 critical code structural symbols:
-  1. server/router.ts:initRoutes()      [Rank: 0.089] (14 calls in)
-  2. auth/jwt.ts:validateToken()        [Rank: 0.076] (11 calls in)
-  3. db/sqlite.ts:query()               [Rank: 0.068] (10 calls in)
-  4. core/engine.ts:runJob()            [Rank: 0.051] (8 calls in)
-  5. utils/logger.ts:writeLog()         [Rank: 0.043] (44 calls in)
-[cv] System ranking cached. Used for priority context packaging.`,
-    },
-    {
-      id: 2,
-      code: "cv pack ./my-repo --budget 32000 -o context.xml",
-      comment: t.getStarted.comments.c3,
-      output: `[cv] Target LLM Budget: 32,000 tokens (approx 128KB)
-[cv] Assembling priority hierarchy...
-  [+] core/engine.ts        (Full fidelity - high rank)     =>  6,400 tokens
-  [+] auth/jwt.ts           (Full fidelity - high rank)     =>  3,200 tokens
-  [~] utils/helpers.ts      (Skeletonized - method outlines) =>  1,420 tokens (saved 8,100)
-  [~] db/sqlite.ts          (Outline mode - classes only)   =>    850 tokens (saved 4,200)
-  [x] tests/engine.test.ts  (Omitted - low rank)            =>      0 tokens (saved 12,000)
-[cv] 
-[cv] Assembly stats:
-  ├─ Raw code repository: 148,200 tokens
-  ├─ Selected context: 24,190 tokens total
-  └─ Compression ratio: 83.7% saved
-[cv] Success: Saved token-budgeted context to context.xml.`,
-    },
-    {
-      id: 3,
-      code: "cv search \"retry backoff\" ./my-repo",
-      comment: t.getStarted.comments.c4,
-      output: `[cv] Query: "retry backoff"
-[cv] Step 1: Run lexical hybrid matching (BM25)
-  └─ Hit: utils/retry.ts:32 (retryWithBackoff)  [Score: 6.42]
-[cv] Step 2: Walk structural call graph 1-hop radius...
-  └─ Resolved inbound callers (context ancestors):
-     [+] jobs/scheduler.ts:114 (runTaskWithRetry)
-     [+] api/client.ts:89 (fetchConfigWithRetry)
-  └─ Resolved outbound callees (dependencies):
-     [+] utils/time.ts:15 (sleepMs)
-[cv] 
-[cv] Returned 4 matched code segments carrying call neighbors.`,
-    },
-    {
-      id: 4,
-      code: "cv serve ./my-repo",
-      comment: t.getStarted.comments.c5,
-      output: `[cv] Starting local dashboard server...
-[cv] Database: .codingverse/index.db
-[cv] Host: http://127.0.0.1:7331
-[cv]
-[cv] Dashboard ready. Press Ctrl+C to terminate.
-[cv] Six boards running:
-  └─ Overview      (index stats, health, languages)
-  └─ Token map     (treemap of the token budget)
-  └─ Code graph    (interactive call graph)
-  └─ Retrieval     (search inspector: BM25 vs graph)
-  └─ Pack preview  (live layered-pack preview)
-  └─ Sync status   (last index run, cache state)`,
-    },
+    { id: 0, code: "cv index .", comment: t.getStarted.comments.c1, output: terminal.index },
+    { id: 1, code: "cv rank .", comment: t.getStarted.comments.c2, output: terminal.rank },
+    { id: 2, code: "cv pack . --budget 32000 -o context.xml", comment: t.getStarted.comments.c3, output: terminal.pack },
+    { id: 3, code: `cv search "${searches[0].query}" .`, comment: t.getStarted.comments.c4, output: terminal.search },
+    { id: 4, code: "cv serve .", comment: t.getStarted.comments.c5, output: terminal.serve },
   ];
 
   const fullCommandString = commands
@@ -110,11 +35,7 @@ export default function TerminalDemo({ t }: TerminalDemoProps) {
       {/* List of commands on the left */}
       <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
         <div className="space-y-3">
-          <div className="flex items-center space-x-2 text-xs font-mono tracking-widest uppercase text-cosmos-soft">
-            <Terminal className="w-4 h-4" />
-            <span>{t.getStarted.walkthrough}</span>
-          </div>
-          <h3 className="font-serif text-2xl lg:text-3xl text-ink tracking-tight">
+          <h3 className="font-display text-2xl lg:text-3xl text-ink tracking-tight">
             {t.getStarted.title}
           </h3>
           <p className="text-ink-dim text-sm max-w-md leading-relaxed font-sans">

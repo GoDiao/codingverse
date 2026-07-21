@@ -1,4 +1,4 @@
-import { Layers, Search, Eye, ArrowDown, Database } from "lucide-react";
+import { Layers, Search, Eye, Database } from "lucide-react";
 import { motion } from "motion/react";
 import { TranslationSchema } from "../translations";
 
@@ -21,9 +21,8 @@ export default function Hero({ t }: HeroProps) {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="pill inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full text-xs font-mono text-ink-dim tracking-wider"
+          className="pill inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-mono text-ink-dim tracking-wider"
         >
-          <span className="w-2 h-2 rounded-full bg-cosmos animate-pulse" />
           <span>{t.hero.eyebrow}</span>
         </motion.div>
 
@@ -33,7 +32,7 @@ export default function Hero({ t }: HeroProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.1 }}
-            className="font-serif text-6xl sm:text-7xl md:text-8xl lg:text-9xl tracking-tighter text-ink font-semibold select-none"
+            className="font-display text-6xl sm:text-7xl md:text-8xl lg:text-9xl tracking-tighter text-ink font-semibold select-none"
           >
             codingverse
           </motion.h1>
@@ -42,7 +41,7 @@ export default function Hero({ t }: HeroProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="font-serif text-2xl sm:text-3xl md:text-4xl text-cosmos-soft tracking-tight font-light"
+            className="font-display text-2xl sm:text-3xl md:text-4xl text-cosmos-soft tracking-tight font-light"
           >
             {t.hero.tagline}
           </motion.p>
@@ -170,11 +169,6 @@ export default function Hero({ t }: HeroProps) {
           </svg>
         </div>
       </motion.div>
-
-      {/* Bounce-to-scroll anchor indicator */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-ink-faint animate-bounce hidden sm:flex flex-col items-center text-[10px] font-mono uppercase tracking-widest cursor-pointer select-none">
-        <ArrowDown className="w-4 h-4 text-cosmos-soft mt-1" />
-      </div>
     </header>
   );
 }

@@ -15,7 +15,6 @@ export default function Navbar({ currentLang, toggleLang, t }: NavbarProps) {
     { label: t.nav.modes, href: "#modes-section" },
     { label: t.nav.why, href: "#why-section" },
     { label: t.nav.getStarted, href: "#terminal-demo-section" },
-    { label: t.nav.brandSystem, href: "#brand-system-section" },
   ];
 
   return (
@@ -30,7 +29,7 @@ export default function Navbar({ currentLang, toggleLang, t }: NavbarProps) {
               <circle cx="24" cy="24" r="4.5" fill="#8b7dff" stroke="#0a0a0c" strokeWidth="2"/>
             </svg>
           </div>
-          <span className="font-serif text-xl font-medium tracking-tight text-ink group-hover:text-cosmos-soft transition-colors select-none">
+          <span className="font-display text-xl font-medium tracking-tight text-ink group-hover:text-cosmos-soft transition-colors select-none">
             codingverse
           </span>
         </a>

@@ -20,11 +20,11 @@ export default function Footer({ t }: FooterProps) {
                   <circle cx="24" cy="24" r="4.5" fill="#8b7dff" stroke="#0a0a0c" strokeWidth="2"/>
                 </svg>
               </div>
-              <span className="font-serif text-2xl font-medium tracking-tight text-ink select-none">
+              <span className="font-display text-2xl font-medium tracking-tight text-ink select-none">
                 codingverse
               </span>
             </div>
-            <p className="font-serif text-lg text-ink-dim italic">
+            <p className="font-display text-lg text-ink-dim italic">
               {t.footer.tagline}
             </p>
           </div>

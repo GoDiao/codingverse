@@ -3,7 +3,6 @@ export interface TranslationSchema {
     modes: string;
     why: string;
     getStarted: string;
-    brandSystem: string;
     github: string;
     switchLang: string;
     star: string;
@@ -52,6 +51,10 @@ export interface TranslationSchema {
     packCaption: string;
     highPriority: string;
     auxiliary: string;
+    contextNeighborhood: string;
+    boardPackHint: string;
+    keptFull: string;
+    compressed: string;
   };
   why: {
     eyebrow: string;
@@ -95,23 +98,6 @@ export interface TranslationSchema {
     queryBadge: string;
     extractionNote: string;
   };
-  brandExplorer: {
-    tabTitle: string;
-    tagline: string;
-    p1: string;
-    logo: string;
-    colors: string;
-    typography: string;
-    components: string;
-    principles: string;
-    principleItems: {
-      t1: string; d1: string; k1: string;
-      t2: string; d2: string; k2: string;
-      t3: string; d3: string; k3: string;
-      t4: string; d4: string; k4: string;
-    };
-    guidelineMode: string;
-  };
   footer: {
     tagline: string;
     openSource: string;
@@ -134,7 +120,6 @@ export const translations: Record<'en' | 'zh', TranslationSchema> = {
       modes: "Modes",
       why: "Why codingverse",
       getStarted: "Get Started",
-      brandSystem: "Brand System",
       github: "GitHub",
       switchLang: "Switch Language",
       star: "Star"
@@ -142,7 +127,7 @@ export const translations: Record<'en' | 'zh', TranslationSchema> = {
     hero: {
       eyebrow: "Unified Code RAG toolkit",
       tagline: "Index once. Three ways out.",
-      sub: "Turn a repository into a single local index — then pack it for an LLM, search it with a real call graph, or observe it on a live dashboard. No embeddings. No services. No keys.",
+      sub: "Turn a repository into a single local index. Then pack it for an LLM, search it with a real call graph, or observe it on a live dashboard. No embeddings. No services. No keys.",
       primaryCta: "Get started",
       secondaryCta: "View on GitHub",
       metaRow: "100% local · 6 languages · MIT"
@@ -151,11 +136,11 @@ export const translations: Record<'en' | 'zh', TranslationSchema> = {
       title: "One index. Three outputs.",
       lead: "Every repository becomes a single SQLite index of symbols, call edges, and chunks. From that one index, three complementary modes.",
       packTitle: "Pack",
-      packDesc: "Assemble a token-budgeted, layered context file for an LLM. Important symbols stay full; the rest degrade to skeleton, outline, or omit — never blindly truncated.",
+      packDesc: "Assemble a token-budgeted, layered context file for an LLM. Important symbols stay full; the rest degrade to skeleton, outline, or omit. Never blindly truncated.",
       searchTitle: "Search",
-      searchDesc: "Hybrid retrieval: BM25 lexical matching fused with a real call graph, so results carry callers and callees — not just text hits.",
+      searchDesc: "Hybrid retrieval: BM25 lexical matching fused with a real call graph, so results carry callers and callees, not just text hits.",
       observeTitle: "Observe",
-      observeDesc: "A six-board dashboard to see what the index actually holds — token map, code graph, retrieval inspector, and live pack preview.",
+      observeDesc: "A six-board dashboard to see what the index actually holds: token map, code graph, retrieval inspector, and live pack preview.",
       visualizerLabel: "Interactive Sandbox Output Preview",
       indexLabel: "Repository Index (SQLite)",
       playground: "Interactive Playground",
@@ -182,7 +167,11 @@ export const translations: Record<'en' | 'zh', TranslationSchema> = {
       retrievalCaption: "Retrieval inspector (query analysis log output)",
       packCaption: "Pack preview (fidelity weights layout)",
       highPriority: "High Priority",
-      auxiliary: "Auxiliary / Compressible"
+      auxiliary: "Auxiliary / Compressible",
+      contextNeighborhood: "Retrieved context neighborhood",
+      boardPackHint: "Live pack configurator (real layer assignment)",
+      keptFull: "Kept full",
+      compressed: "Compressed"
     },
     why: {
       eyebrow: "Technical Architecture",
@@ -226,31 +215,6 @@ export const translations: Record<'en' | 'zh', TranslationSchema> = {
       queryBadge: "Tree-sitter tags query",
       extractionNote: "Symbol extraction walks pattern trees matched by queries."
     },
-    brandExplorer: {
-      tabTitle: "Brand Guidelines & Visual System",
-      tagline: "The codingverse visual framework: Monolith.",
-      p1: "A reusable system designed to feel grand, spacious, precise, and editorial. Crafted using a dark void background, warm ivory typography, and a single precise cosmic purple accent.",
-      logo: "Logo & Wordmark",
-      colors: "Color Tokens",
-      typography: "Typography Scale",
-      components: "Component Library",
-      principles: "Brand Principles",
-      principleItems: {
-        t1: "Architectural Honesty",
-        d1: "Avoid fake telemetry lines, mock port indicators, or simulated server noise. Present real, precise, unembellished commands and outcomes.",
-        k1: "Honest",
-        t2: "Luxury via Whitespace",
-        d2: "Vast negative space establishes quiet confidence. Give headers, paragraphs, and sections ample margins to breathe deeply.",
-        k2: "Spacious",
-        t3: "The Precious Accent",
-        d3: "Limit cosmic violet highlights to a small share of the layout. Restraint makes the accent feel precious and functional.",
-        k3: "Restrained",
-        t4: "Editorial Grandeur",
-        d4: "Oversized, elegant display serifs like Fraunces project premium intent and scale, replacing heavy images or busy icons.",
-        k4: "Grand"
-      },
-      guidelineMode: "Guideline Mode"
-    },
     footer: {
       tagline: "Index once. Three ways out.",
       openSource: "Open Source",
@@ -271,7 +235,6 @@ export const translations: Record<'en' | 'zh', TranslationSchema> = {
       modes: "三种模式",
       why: "核心优势",
       getStarted: "开始使用",
-      brandSystem: "品牌视觉系统",
       github: "GitHub",
       switchLang: "切换语言",
       star: "Star"
@@ -319,7 +282,11 @@ export const translations: Record<'en' | 'zh', TranslationSchema> = {
       retrievalCaption: "检索检查器(查询分析日志输出)",
       packCaption: "打包预览(保真度权重布局)",
       highPriority: "高优先级",
-      auxiliary: "辅助 / 可压缩"
+      auxiliary: "辅助 / 可压缩",
+      contextNeighborhood: "检索出的上下文邻域",
+      boardPackHint: "实时打包配置器(真实层级分配)",
+      keptFull: "完整保留",
+      compressed: "压缩降级"
     },
     why: {
       eyebrow: "技术架构",
@@ -362,31 +329,6 @@ export const translations: Record<'en' | 'zh', TranslationSchema> = {
       registerLink: "了解如何注册自定义语言",
       queryBadge: "Tree-sitter tags 查询",
       extractionNote: "符号抽取沿查询匹配的模式树行走。"
-    },
-    brandExplorer: {
-      tabTitle: "品牌指南 & 视觉系统",
-      tagline: "codingverse 视觉框架: Monolith。",
-      p1: "一个旨在营造宏大、空灵、精准和社论感的复用系统。采用接近黑色的深邃背景、温暖的象牙白排版，以及一道精准的宇宙紫强调色。",
-      logo: "Logo 与字标",
-      colors: "色彩令牌 Token",
-      typography: "字体排版比例",
-      components: "复用组件库",
-      principles: "品牌基本原则",
-      principleItems: {
-        t1: "架构诚实",
-        d1: "不用假遥测、mock 端口指示或模拟服务器噪音。呈现真实、精确、不加修饰的命令与结果。",
-        k1: "诚实",
-        t2: "以留白见奢华",
-        d2: "大面积留白营造沉静的自信。给标题、段落与版块充足的边距,让其充分呼吸。",
-        k2: "空灵",
-        t3: "珍贵的强调色",
-        d3: "把宇宙紫高亮限制在版面的一小部分。克制让强调色显得珍贵而有功能性。",
-        k3: "克制",
-        t4: "社论级的宏大",
-        d4: "超大而优雅的展示衬线体(如 Fraunces)传递高级意图与尺度感,取代厚重图片或繁杂图标。",
-        k4: "宏大"
-      },
-      guidelineMode: "准则模式"
     },
     footer: {
       tagline: "一次索引,三种出口。",

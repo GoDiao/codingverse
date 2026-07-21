@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Layers, Search, Eye, Cpu, Database, Network, Sliders, Play, Info } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { TranslationSchema } from "../translations";
+import { packStops, packSample, packLayerExamples, rawTotal, searches, callGraph, repoStats } from "../data/realData";
 
 interface ModesSectionProps {
   t: TranslationSchema;
@@ -9,45 +10,23 @@ interface ModesSectionProps {
 
 export default function ModesSection({ t }: ModesSectionProps) {
   const [activeTab, setActiveTab] = useState<"pack" | "search" | "observe">("pack");
-  
-  // Pack mode interactive state
-  const [budget, setBudget] = useState<number>(32000);
-  
-  // Search mode interactive state
-  const [searchQuery, setSearchQuery] = useState<string>("auth");
+
+  // Pack mode: slider indexes the three real budget stops (10k / 32k / 128k).
+  const [budgetIdx, setBudgetIdx] = useState<number>(1);
+  const stop = packStops[budgetIdx];
+
+  // Search mode: one of the three real dogfooded queries.
+  const [searchQuery, setSearchQuery] = useState<string>(searches[0].query);
+  const activeSearch = searches.find((s) => s.query === searchQuery) ?? searches[0];
 
   // Observe mode interactive states
   const [activeBoard, setActiveBoard] = useState<number>(0);
-
-  // Search graph helper data
-  const graphNodes = {
-    auth: [
-      { id: "api", label: "api/routes.ts", role: "caller (inbound)", rank: 0.052, active: true },
-      { id: "jwt", label: "auth/jwt.ts:validateToken()", role: "match (lexical)", rank: 0.089, active: true, match: true },
-      { id: "db", label: "db/sqlite.ts:query()", role: "callee (outbound)", rank: 0.041, active: true },
-      { id: "logger", label: "utils/logger.ts:writeLog()", role: "callee (outbound)", rank: 0.024, active: true },
-    ],
-    db: [
-      { id: "engine", label: "core/engine.ts:runJob()", role: "caller (inbound)", rank: 0.078, active: true },
-      { id: "sqlite", label: "db/sqlite.ts:query()", role: "match (lexical)", rank: 0.092, active: true, match: true },
-      { id: "driver", label: "db/driver.ts:connect()", role: "callee (outbound)", rank: 0.034, active: true },
-    ],
-    parser: [
-      { id: "index", label: "cv:indexCommand()", role: "caller (inbound)", rank: 0.045, active: true },
-      { id: "parser", label: "parser/tree.ts:parseAST()", role: "match (lexical)", rank: 0.076, active: true, match: true },
-      { id: "node", label: "parser/node.ts:resolveCall()", role: "callee (outbound)", rank: 0.058, active: true },
-    ]
-  };
 
   return (
     <div className="space-y-12">
       {/* Intro */}
       <div className="text-center space-y-4 max-w-3xl mx-auto">
-        <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full border border-cosmos/20 bg-cosmos/5 text-xs text-cosmos-soft font-mono uppercase tracking-widest">
-          <Database className="w-3.5 h-3.5 text-cosmos" />
-          <span>Index once. Three ways out.</span>
-        </div>
-        <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-ink tracking-tight font-medium">
+        <h2 className="font-display text-3xl md:text-5xl lg:text-6xl text-ink tracking-tight font-medium">
           {t.modes.title}
         </h2>
         <p className="text-ink-dim max-w-2xl mx-auto text-base leading-relaxed">
@@ -99,8 +78,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
         {/* Lefthand Configuration Controls */}
         <div className="lg:col-span-4 p-8 flex flex-col justify-between relative z-10">
           <div className="space-y-6">
-            <div className="flex items-center space-x-2.5">
-              <span className="w-2 h-2 rounded-full bg-cosmos animate-pulse" />
+            <div className="flex items-center">
               <span className="font-mono text-xs text-cosmos-soft tracking-wider uppercase">
                 {t.modes.playground}
               </span>
@@ -116,7 +94,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                   exit={{ opacity: 0, x: 10 }}
                   className="space-y-5"
                 >
-                  <h4 className="font-serif text-2xl text-ink tracking-tight font-semibold">
+                  <h4 className="font-display text-2xl text-ink tracking-tight font-semibold">
                     {t.modes.packTitle}
                   </h4>
                   <p className="text-sm text-ink-dim leading-relaxed">
@@ -126,7 +104,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                   <div className="space-y-4 pt-4 edge-top">
                     <div className="flex items-center justify-between text-xs font-mono">
                       <span className="text-ink-faint">{t.modes.tokenBudget}</span>
-                      <span className="text-cosmos-soft font-semibold">{budget.toLocaleString()} tokens</span>
+                      <span className="text-cosmos-soft font-semibold">{stop.budget.toLocaleString()} tokens</span>
                     </div>
 
                     <div className="space-y-2">
@@ -137,11 +115,11 @@ export default function ModesSection({ t }: ModesSectionProps) {
                       </div>
                       <input
                         type="range"
-                        min="10000"
-                        max="128000"
-                        step="59000"
-                        value={budget}
-                        onChange={(e) => setBudget(Number(e.target.value))}
+                        min="0"
+                        max={packStops.length - 1}
+                        step="1"
+                        value={budgetIdx}
+                        onChange={(e) => setBudgetIdx(Number(e.target.value))}
                         className="w-full accent-cosmos bg-void-3 rounded-lg h-1.5 appearance-none cursor-pointer"
                       />
                     </div>
@@ -149,12 +127,12 @@ export default function ModesSection({ t }: ModesSectionProps) {
                     <div className="panel p-3 text-xs font-mono space-y-1.5">
                       <div className="flex justify-between text-ink-dim">
                         <span>{t.modes.originalCodebase}</span>
-                        <span>148,200 tokens</span>
+                        <span>{rawTotal.tokens.toLocaleString()} tokens</span>
                       </div>
                       <div className="flex justify-between font-bold text-ink">
                         <span>{t.modes.outputContext}</span>
-                        <span className={budget <= 10000 ? "text-cosmos-soft" : "text-emerald-400"}>
-                          {budget <= 10000 ? "~9,540 tokens" : budget <= 69000 ? "~24,190 tokens" : "~122,800 tokens"}
+                        <span className={budgetIdx === 0 ? "text-cosmos-soft" : "text-emerald-400"}>
+                          {stop.actualTokens.toLocaleString()} tokens · {stop.files} files
                         </span>
                       </div>
                     </div>
@@ -170,7 +148,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                   exit={{ opacity: 0, x: 10 }}
                   className="space-y-5"
                 >
-                  <h4 className="font-serif text-2xl text-ink tracking-tight font-semibold">
+                  <h4 className="font-display text-2xl text-ink tracking-tight font-semibold">
                     {t.modes.searchTitle}
                   </h4>
                   <p className="text-sm text-ink-dim leading-relaxed">
@@ -180,7 +158,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                   <div className="space-y-4 pt-4 edge-top">
                     <span className="text-xs font-mono text-ink-faint block">{t.modes.chooseKeyword}</span>
                     <div className="grid grid-cols-3 gap-2">
-                      {(["auth", "db", "parser"] as const).map((q) => (
+                      {searches.map((s) => s.query).map((q) => (
                         <button
                           key={q}
                           onClick={() => setSearchQuery(q)}
@@ -216,7 +194,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                   exit={{ opacity: 0, x: 10 }}
                   className="space-y-5"
                 >
-                  <h4 className="font-serif text-2xl text-ink tracking-tight font-semibold">
+                  <h4 className="font-display text-2xl text-ink tracking-tight font-semibold">
                     {t.modes.observeTitle}
                   </h4>
                   <p className="text-sm text-ink-dim leading-relaxed">
@@ -281,66 +259,53 @@ export default function ModesSection({ t }: ModesSectionProps) {
             <AnimatePresence mode="wait">
               {activeTab === "pack" && (
                 <motion.div
-                  key={`pack-preview-${budget}`}
+                  key={`pack-preview-${budgetIdx}`}
                   initial={{ opacity: 0, scale: 0.98 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.2 }}
                   className="font-mono text-xs space-y-3 w-full"
                 >
-                  <div className="panel p-4 space-y-2">
-                    <div className="text-ink-faint text-[10px]"># context.xml — Packed representation</div>
-                    
-                    {/* Critical Class - always full */}
-                    <div className="text-emerald-400">
-                      &lt;<span className="text-ink">file path="core/engine.ts" priority="high"</span>&gt;
+                  <div className="panel p-4 space-y-3">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-ink-faint"># context.xml · budget {stop.budget.toLocaleString()}</span>
+                      <span className="text-cosmos-soft">{stop.actualTokens.toLocaleString()} / {rawTotal.tokens.toLocaleString()} tok</span>
                     </div>
-                    <div className="pl-4 text-ink-dim">
-                      <span className="text-cosmos-soft font-semibold">export class</span> Engine &#123;
-                      <div className="pl-4 text-ink-faint">// Full file fidelity retained (high PageRank)</div>
-                      <div className="pl-4 text-emerald-400/80">async index() &#123; ... &#125;</div>
-                      <div className="pl-4 text-emerald-400/80">async pack(opts) &#123; ... &#125;</div>
-                      &#125;
-                    </div>
-                    <div className="text-emerald-400">&lt;/<span className="text-ink">file</span>&gt;</div>
 
-                    {/* Helper function - degraded depending on budget */}
-                    {budget <= 10000 ? (
-                      <div className="border border-cosmos/20 bg-cosmos/5 p-3 rounded-lg mt-3">
-                        <div className="text-cosmos-soft font-semibold flex items-center justify-between mb-1">
-                          <span>&lt;file path="utils/helpers.ts" priority="low" fidelity="omitted"&gt;</span>
-                          <span className="text-[10px] bg-cosmos/20 text-cosmos-soft px-1.5 rounded">Omitted</span>
+                    {/* Real layer distribution for this budget stop */}
+                    <div className="flex h-2 w-full overflow-hidden rounded-full bg-void-2">
+                      {(["full", "skeleton", "outline", "omit"] as const).map((layer) => {
+                        const count = (stop.layers as Record<string, number>)[layer] ?? 0;
+                        if (!count) return null;
+                        const color = layer === "full" ? "bg-emerald-400" : layer === "skeleton" ? "bg-amber-400" : layer === "outline" ? "bg-cosmos" : "bg-void-3";
+                        return <div key={layer} className={color} style={{ width: `${(count / stop.files) * 100}%` }} title={`${layer}: ${count}`} />;
+                      })}
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-ink-faint">
+                      {(["full", "skeleton", "outline", "omit"] as const).map((layer) => {
+                        const count = (stop.layers as Record<string, number>)[layer] ?? 0;
+                        if (!count) return null;
+                        const dot = layer === "full" ? "bg-emerald-400" : layer === "skeleton" ? "bg-amber-400" : layer === "outline" ? "bg-cosmos" : "bg-void-3";
+                        return (
+                          <span key={layer} className="flex items-center gap-1">
+                            <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />{layer} · {count}
+                          </span>
+                        );
+                      })}
+                    </div>
+
+                    {/* Real packed files at this stop, largest first */}
+                    <div className="pt-2 edge-top space-y-1">
+                      {packSample.slice(0, 5).map((f) => (
+                        <div key={f.path} className="flex items-center justify-between gap-2">
+                          <span className="text-ink-dim truncate">{f.path.replace(/^packages\//, "")}</span>
+                          <span className="flex items-center gap-2 shrink-0">
+                            <span className="text-ink-faint">{f.tokens?.toLocaleString()}</span>
+                            <span className={`text-[9px] px-1.5 rounded ${f.layer === "full" ? "bg-emerald-500/10 text-emerald-300" : f.layer === "skeleton" ? "bg-amber-500/10 text-amber-300" : "bg-cosmos/15 text-cosmos-soft"}`}>{f.layer}</span>
+                          </span>
                         </div>
-                        <p className="text-ink-faint text-[10px] pl-4 italic">
-                          // [Compressed 82 lines to satisfy 10k Token Budget limit]
-                        </p>
-                      </div>
-                    ) : budget <= 69000 ? (
-                      <div className="panel p-3 rounded-lg mt-3">
-                        <div className="text-amber-400 font-semibold flex items-center justify-between mb-1">
-                          <span>&lt;file path="utils/helpers.ts" priority="medium" fidelity="skeleton"&gt;</span>
-                          <span className="text-[10px] bg-amber-500/10 text-amber-300 px-1.5 rounded">Skeleton</span>
-                        </div>
-                        <div className="pl-4 text-ink-faint text-[11px] leading-relaxed">
-                          <span className="text-cosmos-soft">export function</span> parseTokenSize(input: string) &#123; <span className="text-ink-faint">// ... [8 lines of internal code skeletonized]</span> &#125;
-                          <br />
-                          <span className="text-cosmos-soft">export function</span> calculatePageRank(edges: Edge[]) &#123; <span className="text-ink-faint">// ... [21 lines of internal code skeletonized]</span> &#125;
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="border border-emerald-500/20 bg-emerald-500/5 p-3 rounded-lg mt-3">
-                        <div className="text-emerald-400 font-semibold flex items-center justify-between mb-1">
-                          <span>&lt;file path="utils/helpers.ts" priority="medium" fidelity="full"&gt;</span>
-                          <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 rounded">Full Fidelity</span>
-                        </div>
-                        <div className="pl-4 text-ink-dim">
-                          <span className="text-cosmos-soft">export function</span> parseTokenSize(input: string) &#123;
-                          <div className="pl-4 text-[#dfded9]">const bytes = Buffer.byteLength(input, 'utf8');</div>
-                          <div className="pl-4 text-[#dfded9]">return Math.ceil(bytes / 4);</div>
-                          &#125;
-                        </div>
-                      </div>
-                    )}
+                      ))}
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -353,53 +318,47 @@ export default function ModesSection({ t }: ModesSectionProps) {
                   exit={{ opacity: 0 }}
                   className="space-y-4 w-full"
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    {graphNodes[searchQuery as keyof typeof graphNodes].map((node) => (
+                  <div className="flex items-center justify-between font-mono text-[11px] text-ink-faint">
+                    <span>cv search "{activeSearch.query}" · RRF fusion</span>
+                    <span className="text-cosmos-soft">top {activeSearch.hits.length}</span>
+                  </div>
+
+                  {/* Real hybrid-search hits, ranked by RRF */}
+                  <div className="space-y-2">
+                    {activeSearch.hits.map((hit, i) => (
                       <div
-                        key={node.id}
-                        className={`p-3.5 rounded-xl border font-mono text-xs relative ${
-                          node.match
-                            ? "bg-cosmos/10 border-cosmos text-ink shadow-lg shadow-cosmos/10"
-                            : "bg-void-2 border-line text-ink-dim"
+                        key={`${hit.file}-${hit.startLine}`}
+                        className={`p-3 rounded-xl border font-mono text-xs relative ${
+                          i === 0 ? "bg-cosmos/10 border-cosmos text-ink" : "bg-void-2 border-line text-ink-dim"
                         }`}
                       >
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="text-[10px] text-ink-faint uppercase font-semibold">
-                            {node.role}
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-ink truncate">
+                            {hit.file}<span className="text-ink-faint font-normal">:{hit.startLine}-{hit.endLine}</span>
                           </span>
-                          <span className="text-[10px] bg-void-3 px-1 rounded text-cosmos-soft">
-                            PR: {node.rank}
-                          </span>
+                          {i === 0 && <span className="text-[9px] bg-cosmos/20 text-cosmos-soft px-1.5 rounded shrink-0">top hit</span>}
                         </div>
-                        <div className="font-bold text-ink mt-2 overflow-hidden text-ellipsis whitespace-nowrap">
-                          {node.label.split(":")[0]}
+                        <div className="flex items-center gap-3 mt-1.5 text-[10px] text-ink-faint">
+                          <span>bm25 <span className="text-emerald-300">{hit.bm25}</span></span>
+                          <span>graph <span className="text-cosmos-soft">{hit.graph}</span></span>
+                          <span>rrf <span className="text-ink-dim">{hit.rrf}</span></span>
+                          <span className="ml-auto">+{hit.related} related</span>
                         </div>
-                        <div className="text-[10px] text-ink-faint mt-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                          {node.label.split(":")[1] || "Class File Scope"}
-                        </div>
-
-                        {node.match && (
-                          <span className="absolute -top-1.5 -right-1.5 flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cosmos opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-cosmos"></span>
-                          </span>
-                        )}
                       </div>
                     ))}
                   </div>
 
-                  {/* Flow Walk Connector Line Visual */}
-                  <div className="panel p-4 font-mono text-xs space-y-2 mt-4">
+                  {/* Real retrieved context neighborhood */}
+                  <div className="panel p-4 font-mono text-xs space-y-2 mt-2">
                     <div className="text-cosmos-soft flex items-center space-x-1.5">
                       <Network className="w-3.5 h-3.5" />
-                      <span>Retrieved Context Neighborhood XML Layout</span>
+                      <span>{t.modes.contextNeighborhood}</span>
                     </div>
-                    <pre className="text-ink-faint text-[11px] leading-relaxed whitespace-pre overflow-x-auto">
-{`&lt;context query="${searchQuery}"&gt;
-  &lt;caller path="${graphNodes[searchQuery as keyof typeof graphNodes][0].label.split(":")[0]}" /&gt;
-  &lt;match path="${graphNodes[searchQuery as keyof typeof graphNodes][1].label.split(":")[0]}" fidelity="full" /&gt;
-  &lt;callee path="${graphNodes[searchQuery as keyof typeof graphNodes][2].label.split(":")[0]}" fidelity="outline" /&gt;
-&lt;/context&gt;`}
+                    <pre className="text-ink-faint text-[11px] leading-relaxed whitespace-pre-wrap break-all">
+{`<context query="${activeSearch.query}">
+  <match path="${activeSearch.hits[0].file}" lines="${activeSearch.hits[0].startLine}-${activeSearch.hits[0].endLine}" />
+  <fused strategy="RRF" bm25+graph="${activeSearch.hits[0].bm25} + ${activeSearch.hits[0].graph}" />
+</context>`}
                     </pre>
                   </div>
                 </motion.div>
@@ -415,33 +374,31 @@ export default function ModesSection({ t }: ModesSectionProps) {
                 >
                   {activeBoard === 0 && (
                     <div className="space-y-3">
-                      <div className="text-xs font-mono text-ink-dim">Token map (repository token treemap)</div>
-                      <div className="grid grid-cols-12 gap-1 panel p-3">
-                        {Array.from({ length: 96 }).map((_, i) => {
-                          let opacity = "bg-cosmos/5";
-                          if (i % 7 === 0) opacity = "bg-cosmos/80";
-                          else if (i % 4 === 0) opacity = "bg-cosmos/50";
-                          else if (i % 3 === 0) opacity = "bg-cosmos/30";
-                          else if (i % 2 === 0) opacity = "bg-cosmos/15";
-
+                      <div className="flex items-center justify-between text-xs font-mono text-ink-dim">
+                        <span>{t.modes.tokenMapCaption}</span>
+                        <span className="text-ink-faint">top {repoStats.topFiles.length} files</span>
+                      </div>
+                      {/* Real token treemap: bar width ∝ real token count */}
+                      <div className="panel p-3 space-y-1.5">
+                        {repoStats.topFiles.map((f, i) => {
+                          const max = repoStats.topFiles[0].tokens;
+                          const pct = (f.tokens / max) * 100;
+                          const shade = i === 0 ? "bg-cosmos/80" : i < 2 ? "bg-cosmos/50" : i < 4 ? "bg-cosmos/30" : "bg-cosmos/15";
                           return (
-                            <div
-                              key={i}
-                              className={`h-4 rounded-[2px] transition-all hover:scale-110 cursor-pointer ${opacity}`}
-                              title={`Chunk #${i}: ${i % 3 === 0 ? "500 tokens" : "120 tokens"}`}
-                            />
+                            <div key={f.path} className="font-mono text-[10px]">
+                              <div className="flex items-center justify-between text-ink-dim">
+                                <span className="truncate">{f.path.replace(/^packages\//, "")}</span>
+                                <span className="text-ink-faint shrink-0 ml-2">{f.tokens.toLocaleString()}</span>
+                              </div>
+                              <div className="w-full bg-void-2 h-1.5 rounded overflow-hidden mt-0.5">
+                                <div className={`h-full ${shade}`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
                           );
                         })}
                       </div>
-                      <div className="flex justify-between items-center text-[10px] font-mono text-ink-faint">
-                        <span>Low Token Weight</span>
-                        <div className="flex items-center space-x-1">
-                          <span className="w-2.5 h-2.5 rounded-[1px] bg-cosmos/5" />
-                          <span className="w-2.5 h-2.5 rounded-[1px] bg-cosmos/30" />
-                          <span className="w-2.5 h-2.5 rounded-[1px] bg-cosmos/50" />
-                          <span className="w-2.5 h-2.5 rounded-[1px] bg-cosmos/80" />
-                        </div>
-                        <span>High Token Weight</span>
+                      <div className="text-[10px] font-mono text-ink-faint">
+                        {repoStats.chunks} chunks · {rawTotal.tokens.toLocaleString()} tokens total
                       </div>
                     </div>
                   )}
@@ -467,7 +424,7 @@ export default function ModesSection({ t }: ModesSectionProps) {
                         <div className="absolute top-[110px] left-[485px] w-3.5 h-3.5 rounded-full bg-ink border border-cosmos hover:scale-125 transition-transform cursor-pointer" />
                         
                         <div className="absolute bottom-2 left-3 text-[10px] font-mono text-ink-faint">
-                          Resolved Call Edges: 12,893 | Nodes: 8,419
+                          Resolved call edges: {repoStats.edges} | Nodes: {repoStats.symbols}
                         </div>
                       </div>
                     </div>
@@ -477,44 +434,39 @@ export default function ModesSection({ t }: ModesSectionProps) {
                     <div className="space-y-3">
                       <div className="text-xs font-mono text-ink-dim">Retrieval Inspector (Query analysis log output)</div>
                       <div className="panel p-4 font-mono text-[11px] leading-relaxed space-y-1 text-ink-dim">
-                        <div className="text-emerald-400 font-semibold">[Inspect] Query "middleware" submitted</div>
-                        <div>- Token budget set: 32k</div>
-                        <div>- Resolved lexical BM25 matching context records: 3</div>
-                        <div>- Walked call-graph caller/callee links: 2 hops</div>
-                        <div>- Fused BM25 + graph paths via RRF</div>
-                        <div className="text-cosmos-soft">- Assembled context neighborhood, ranked by RRF</div>
+                        <div className="text-emerald-400 font-semibold">[inspect] cv search "{searches[0].query}"</div>
+                        <div>- BM25 lexical hits: {searches[0].hits.length} chunks</div>
+                        <div>- top hit: {searches[0].hits[0].file}:{searches[0].hits[0].startLine} (bm25 {searches[0].hits[0].bm25}, graph {searches[0].hits[0].graph})</div>
+                        <div>- walked call-graph edges, +{searches[0].hits[0].related} related nodes</div>
+                        <div className="text-cosmos-soft">- fused via RRF → rrf {searches[0].hits[0].rrf}</div>
                       </div>
                     </div>
                   )}
 
                   {activeBoard === 3 && (
                     <div className="space-y-3">
-                      <div className="text-xs font-mono text-ink-dim">Live Pack Configurator (Fidelity weights layout)</div>
+                      <div className="text-xs font-mono text-ink-dim">{t.modes.boardPackHint}</div>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="panel p-3 font-mono text-xs">
-                          <div className="text-cosmos-soft font-semibold mb-2">High Priority</div>
+                          <div className="text-emerald-400 font-semibold mb-2">{t.modes.keptFull}</div>
                           <div className="space-y-1">
-                            <div className="bg-void-2 p-1.5 rounded border border-line text-[10px] flex justify-between">
-                              <span>core/engine.ts</span>
-                              <span className="text-emerald-400">Full</span>
-                            </div>
-                            <div className="bg-void-2 p-1.5 rounded border border-line text-[10px] flex justify-between">
-                              <span>auth/jwt.ts</span>
-                              <span className="text-emerald-400">Full</span>
-                            </div>
+                            {packLayerExamples.full.map((f) => (
+                              <div key={f.path} className="bg-void-2 p-1.5 rounded border border-line text-[10px] flex justify-between gap-2">
+                                <span className="truncate">{f.path.replace(/^packages\//, "")}</span>
+                                <span className="text-emerald-400 shrink-0">full</span>
+                              </div>
+                            ))}
                           </div>
                         </div>
                         <div className="panel p-3 font-mono text-xs">
-                          <div className="text-amber-400 font-semibold mb-2">Auxiliary / Compressible</div>
+                          <div className="text-amber-400 font-semibold mb-2">{t.modes.compressed}</div>
                           <div className="space-y-1">
-                            <div className="bg-void-2 p-1.5 rounded border border-line text-[10px] flex justify-between">
-                              <span>utils/helpers.ts</span>
-                              <span className="text-amber-400">Skeleton</span>
-                            </div>
-                            <div className="bg-void-2 p-1.5 rounded border border-line text-[10px] flex justify-between">
-                              <span>tests/engine.test.ts</span>
-                              <span className="text-red-400">Omitted</span>
-                            </div>
+                            {packLayerExamples.compressed.map((f) => (
+                              <div key={f.path} className="bg-void-2 p-1.5 rounded border border-line text-[10px] flex justify-between gap-2">
+                                <span className="truncate">{f.path.replace(/^packages\//, "")}</span>
+                                <span className={`shrink-0 ${f.layer === "skeleton" ? "text-amber-400" : "text-cosmos-soft"}`}>{f.layer}</span>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </div>

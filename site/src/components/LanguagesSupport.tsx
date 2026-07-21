@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Code, Terminal, ExternalLink } from "lucide-react";
 import { TranslationSchema } from "../translations";
+import { astQueries } from "../data/realData";
 
 interface LanguagesSupportProps {
   t: TranslationSchema;
@@ -9,84 +10,18 @@ interface LanguagesSupportProps {
 export default function LanguagesSupport({ t }: LanguagesSupportProps) {
   const [selectedLang, setSelectedLang] = useState<string>("TypeScript");
 
+  // File extensions per grammar (from core/parse/languages/registry.ts).
   const languages = [
-    {
-      name: "TypeScript",
-      ext: ".ts / .tsx",
-      query: `((method_definition
-  name: (property_identifier) @method.name) @method)
-
-((function_declaration
-  name: (identifier) @function.name) @function)
-
-((call_expression
-  function: [
-    (identifier) @call.identifier
-    (member_expression property: (property_identifier) @call.member)
-  ]) @call)`,
-    },
-    {
-      name: "JavaScript",
-      ext: ".js / .jsx",
-      query: `((method_definition
-  name: (property_identifier) @method.name) @method)
-
-((class_declaration
-  name: (identifier) @class.name) @class)
-
-((call_expression
-  function: (identifier) @call.identifier) @call)`,
-    },
-    {
-      name: "Python",
-      ext: ".py",
-      query: `((function_definition
-  name: (identifier) @function.name) @function)
-
-((class_definition
-  name: (identifier) @class.name) @class)
-
-((call
-  function: (identifier) @call.identifier) @call)`,
-    },
-    {
-      name: "Go",
-      ext: ".go",
-      query: `((function_declaration
-  name: (identifier) @function.name) @function)
-
-((method_declaration
-  name: (field_identifier) @method.name) @method)
-
-((call_expression
-  function: (identifier) @call.identifier) @call)`,
-    },
-    {
-      name: "Rust",
-      ext: ".rs",
-      query: `((function_item
-  name: (identifier) @function.name) @function)
-
-((impl_item) @impl)
-
-((call_expression
-  function: (identifier) @call.identifier) @call)`,
-    },
-    {
-      name: "Java",
-      ext: ".java",
-      query: `((method_declaration
-  name: (identifier) @method.name) @method)
-
-((class_declaration
-  name: (identifier) @class.name) @class)
-
-((method_invocation
-  name: (identifier) @call.identifier) @call)`,
-    },
+    { name: "TypeScript", ext: ".ts / .tsx / .mts / .cts" },
+    { name: "JavaScript", ext: ".js / .jsx / .mjs / .cjs" },
+    { name: "Python", ext: ".py" },
+    { name: "Go", ext: ".go" },
+    { name: "Rust", ext: ".rs" },
+    { name: "Java", ext: ".java" },
   ];
 
-  const currentQuery = languages.find((l) => l.name === selectedLang)?.query || "";
+  // Real tree-sitter tag queries, dogfooded from the codingverse source.
+  const currentQuery = astQueries[selectedLang as keyof typeof astQueries] || "";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
@@ -97,7 +32,7 @@ export default function LanguagesSupport({ t }: LanguagesSupportProps) {
             <Code className="w-4 h-4" />
             <span>{t.languages.eyebrow}</span>
           </div>
-          <h3 className="font-serif text-2xl lg:text-3xl text-ink tracking-tight font-semibold">
+          <h3 className="font-display text-2xl lg:text-3xl text-ink tracking-tight font-semibold">
             {t.languages.title}
           </h3>
           <p className="text-ink-dim text-sm leading-relaxed font-sans max-w-md">
